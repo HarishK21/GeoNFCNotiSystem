@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../core/models/app_role.dart';
 import '../../domain/models/audit_trail_entry.dart';
 import '../../domain/models/emergency_notice.dart';
@@ -12,22 +14,206 @@ import '../../domain/models/student.dart';
 import '../../domain/models/user_profile.dart';
 
 class MockDataStore {
-  const MockDataStore();
+  MockDataStore() {
+    _userProfiles = _seedUserProfiles();
+    _students = _seedStudents();
+    _guardians = _seedGuardians();
+    _pickupPermissions = _seedPickupPermissions();
+    _pickupEvents = _seedPickupEvents();
+    _releaseEvents = _seedReleaseEvents();
+    _announcements = _seedAnnouncements();
+    _emergencyNotices = _seedEmergencyNotices();
+    _queueEntries = _seedQueueEntries();
+    _auditTrail = _seedAuditTrail();
+  }
 
   static const primarySchoolId = 'school_springfield';
-  static const currentUserId = 'dev-parent-1';
+  static const parentUserId = 'dev-parent-1';
+  static const staffUserId = 'dev-staff-1';
+  static const parentGuardianId = 'guardian_andrea';
+  static const currentUserId = parentUserId;
 
-  List<UserProfile> get userProfiles => const [
+  final School school = const School(
+    id: primarySchoolId,
+    name: 'Springfield Academy',
+    timezone: 'America/Toronto',
+    pickupZones: ['North Loop', 'South Gate', 'Gym Corridor'],
+  );
+
+  final _authController = StreamController<String?>.broadcast();
+  final _queueController = StreamController<List<PickupQueueEntry>>.broadcast();
+  final _pickupPermissionsController =
+      StreamController<List<PickupPermission>>.broadcast();
+  final _pickupEventsController =
+      StreamController<List<PickupEvent>>.broadcast();
+  final _releaseEventsController =
+      StreamController<List<ReleaseEvent>>.broadcast();
+  final _announcementsController =
+      StreamController<List<SchoolAnnouncement>>.broadcast();
+  final _emergencyController =
+      StreamController<List<EmergencyNotice>>.broadcast();
+  final _auditController = StreamController<List<AuditTrailEntry>>.broadcast();
+
+  late final List<UserProfile> _userProfiles;
+  late final List<Student> _students;
+  late final List<Guardian> _guardians;
+  late final List<PickupPermission> _pickupPermissions;
+  late final List<PickupEvent> _pickupEvents;
+  late final List<ReleaseEvent> _releaseEvents;
+  late final List<SchoolAnnouncement> _announcements;
+  late final List<EmergencyNotice> _emergencyNotices;
+  late final List<PickupQueueEntry> _queueEntries;
+  late final List<AuditTrailEntry> _auditTrail;
+  String? _currentUserId;
+
+  List<UserProfile> get userProfiles => List.unmodifiable(_userProfiles);
+  List<Student> get students => List.unmodifiable(_students);
+  List<Guardian> get guardians => List.unmodifiable(_guardians);
+  List<PickupPermission> get pickupPermissions =>
+      List.unmodifiable(_pickupPermissions);
+  List<PickupEvent> get pickupEvents => List.unmodifiable(_pickupEvents);
+  List<ReleaseEvent> get releaseEvents => List.unmodifiable(_releaseEvents);
+  List<SchoolAnnouncement> get announcements => List.unmodifiable(_announcements);
+  List<EmergencyNotice> get emergencyNotices =>
+      List.unmodifiable(_emergencyNotices);
+  List<PickupQueueEntry> get queueEntries => List.unmodifiable(_queueEntries);
+  List<AuditTrailEntry> get auditTrail => List.unmodifiable(_auditTrail);
+  String? get currentUserId => _currentUserId;
+
+  Stream<String?> watchCurrentUserId() async* {
+    yield _currentUserId;
+    yield* _authController.stream;
+  }
+
+  Stream<List<PickupQueueEntry>> watchQueue(String schoolId) async* {
+    yield _filterBySchool(_queueEntries, schoolId, (item) => item.schoolId);
+    yield* _queueController.stream.map(
+      (items) => _filterBySchool(items, schoolId, (item) => item.schoolId),
+    );
+  }
+
+  Stream<List<PickupPermission>> watchPermissions(String schoolId) async* {
+    yield _filterBySchool(
+      _pickupPermissions,
+      schoolId,
+      (item) => item.schoolId,
+    );
+    yield* _pickupPermissionsController.stream.map(
+      (items) => _filterBySchool(items, schoolId, (item) => item.schoolId),
+    );
+  }
+
+  Stream<List<PickupEvent>> watchPickupEvents(String schoolId) async* {
+    yield _filterBySchool(_pickupEvents, schoolId, (item) => item.schoolId);
+    yield* _pickupEventsController.stream.map(
+      (items) => _filterBySchool(items, schoolId, (item) => item.schoolId),
+    );
+  }
+
+  Stream<List<ReleaseEvent>> watchReleaseEvents(String schoolId) async* {
+    yield _filterBySchool(_releaseEvents, schoolId, (item) => item.schoolId);
+    yield* _releaseEventsController.stream.map(
+      (items) => _filterBySchool(items, schoolId, (item) => item.schoolId),
+    );
+  }
+
+  Stream<List<SchoolAnnouncement>> watchAnnouncements(String schoolId) async* {
+    yield _filterBySchool(_announcements, schoolId, (item) => item.schoolId);
+    yield* _announcementsController.stream.map(
+      (items) => _filterBySchool(items, schoolId, (item) => item.schoolId),
+    );
+  }
+
+  Stream<List<EmergencyNotice>> watchEmergencyNotices(String schoolId) async* {
+    yield _filterBySchool(_emergencyNotices, schoolId, (item) => item.schoolId);
+    yield* _emergencyController.stream.map(
+      (items) => _filterBySchool(items, schoolId, (item) => item.schoolId),
+    );
+  }
+
+  Stream<List<AuditTrailEntry>> watchAuditTrail(String schoolId) async* {
+    yield _filterBySchool(_auditTrail, schoolId, (item) => item.schoolId);
+    yield* _auditController.stream.map(
+      (items) => _filterBySchool(items, schoolId, (item) => item.schoolId),
+    );
+  }
+
+  Future<void> signInAsRole(AppRole role) async {
+    _currentUserId = switch (role) {
+      AppRole.parent => parentUserId,
+      AppRole.staff => staffUserId,
+    };
+    _authController.add(_currentUserId);
+  }
+
+  Future<void> signOut() async {
+    _currentUserId = null;
+    _authController.add(null);
+  }
+
+  Future<void> saveQueueEntry(PickupQueueEntry entry) async {
+    final index = _queueEntries.indexWhere((item) => item.id == entry.id);
+    if (index >= 0) {
+      _queueEntries[index] = entry;
+    } else {
+      _queueEntries.add(entry);
+    }
+    _queueController.add(List.unmodifiable(_queueEntries));
+  }
+
+  Future<void> createPermission(PickupPermission permission) async {
+    _pickupPermissions.add(permission);
+    _pickupPermissionsController.add(List.unmodifiable(_pickupPermissions));
+  }
+
+  Future<void> logPickupEvent(PickupEvent event) async {
+    _pickupEvents.add(event);
+    _pickupEventsController.add(List.unmodifiable(_pickupEvents));
+  }
+
+  Future<void> createReleaseEvent(ReleaseEvent event) async {
+    _releaseEvents.add(event);
+    _releaseEventsController.add(List.unmodifiable(_releaseEvents));
+  }
+
+  Future<void> appendAuditEntry(AuditTrailEntry entry) async {
+    _auditTrail.add(entry);
+    _auditController.add(List.unmodifiable(_auditTrail));
+  }
+
+  void dispose() {
+    _authController.close();
+    _queueController.close();
+    _pickupPermissionsController.close();
+    _pickupEventsController.close();
+    _releaseEventsController.close();
+    _announcementsController.close();
+    _emergencyController.close();
+    _auditController.close();
+  }
+
+  static List<T> _filterBySchool<T>(
+    List<T> items,
+    String schoolId,
+    String Function(T item) selector,
+  ) {
+    return items.where((item) => selector(item) == schoolId).toList(
+      growable: false,
+    );
+  }
+
+  static List<UserProfile> _seedUserProfiles() => const [
     UserProfile(
-      uid: 'dev-parent-1',
+      uid: parentUserId,
       role: AppRole.parent,
       schoolId: primarySchoolId,
       displayName: 'Andrea Brooks',
       email: 'andrea.brooks@example.com',
       phone: '+1-555-0100',
+      linkedGuardianId: parentGuardianId,
     ),
     UserProfile(
-      uid: 'dev-staff-1',
+      uid: staffUserId,
       role: AppRole.staff,
       schoolId: primarySchoolId,
       displayName: 'Ms. Carson',
@@ -36,14 +222,7 @@ class MockDataStore {
     ),
   ];
 
-  School get school => const School(
-    id: primarySchoolId,
-    name: 'Springfield Academy',
-    timezone: 'America/Toronto',
-    pickupZones: ['North Loop', 'South Gate', 'Gym Corridor'],
-  );
-
-  List<Student> get students => const [
+  static List<Student> _seedStudents() => const [
     Student(
       id: 'student_maya',
       schoolId: primarySchoolId,
@@ -73,13 +252,21 @@ class MockDataStore {
     ),
   ];
 
-  List<Guardian> get guardians => const [
+  static List<Guardian> _seedGuardians() => const [
     Guardian(
       id: 'guardian_andrea',
       schoolId: primarySchoolId,
       displayName: 'Andrea Brooks',
       email: 'andrea.brooks@example.com',
       phone: '+1-555-0100',
+      studentIds: ['student_maya'],
+    ),
+    Guardian(
+      id: 'guardian_jordan',
+      schoolId: primarySchoolId,
+      displayName: 'Jordan Brooks',
+      email: 'jordan.brooks@example.com',
+      phone: '+1-555-0190',
       studentIds: ['student_maya'],
     ),
     Guardian(
@@ -100,12 +287,12 @@ class MockDataStore {
     ),
   ];
 
-  List<PickupPermission> get pickupPermissions => [
+  static List<PickupPermission> _seedPickupPermissions() => [
     PickupPermission(
       id: 'permission_jordan',
       schoolId: primarySchoolId,
       studentId: 'student_maya',
-      guardianId: 'guardian_andrea',
+      guardianId: parentGuardianId,
       delegateName: 'Jordan Brooks',
       delegatePhone: '+1-555-0190',
       relationship: 'Grandparent',
@@ -114,33 +301,20 @@ class MockDataStore {
       endsAt: DateTime.parse('2026-03-17T16:00:00Z'),
       isActive: true,
     ),
-    PickupPermission(
-      id: 'permission_mina',
-      schoolId: primarySchoolId,
-      studentId: 'student_noah',
-      guardianId: 'guardian_rohan',
-      delegateName: 'Mina Patel',
-      delegatePhone: '+1-555-0204',
-      relationship: 'Neighbor',
-      approvedBy: 'Front Office',
-      startsAt: DateTime.parse('2026-03-20T15:00:00Z'),
-      endsAt: DateTime.parse('2026-03-20T15:45:00Z'),
-      isActive: false,
-    ),
   ];
 
-  List<PickupEvent> get pickupEvents => [
+  static List<PickupEvent> _seedPickupEvents() => [
     PickupEvent(
       id: 'pickup_maya',
       schoolId: primarySchoolId,
       studentId: 'student_maya',
-      guardianId: 'guardian_andrea',
+      guardianId: parentGuardianId,
       type: PickupEventType.approaching,
       source: PickupEventSource.geofence,
       pickupZone: 'North Loop',
       occurredAt: DateTime.parse('2026-03-17T19:09:00Z'),
       actorName: 'System',
-      notes: 'Guardian entered geofence radius near North Loop.',
+      notes: 'Guardian entered pickup radius near North Loop.',
     ),
     PickupEvent(
       id: 'pickup_noah',
@@ -151,38 +325,38 @@ class MockDataStore {
       source: PickupEventSource.nfc,
       pickupZone: 'South Gate',
       occurredAt: DateTime.parse('2026-03-17T19:12:00Z'),
-      actorName: 'South Gate NFC Reader',
-      notes: 'Verified on-site by NFC tap at South Gate.',
+      actorName: 'South Gate staff',
+      notes: 'Ready for staff release confirmation.',
     ),
     PickupEvent(
       id: 'pickup_ava',
       schoolId: primarySchoolId,
       studentId: 'student_ava',
       guardianId: 'guardian_lena',
-      type: PickupEventType.queued,
+      type: PickupEventType.pending,
       source: PickupEventSource.manual,
       pickupZone: 'North Loop',
       occurredAt: DateTime.parse('2026-03-17T19:03:00Z'),
-      actorName: 'System',
-      notes: 'Pickup request queued by family app.',
+      actorName: 'Family app',
+      notes: 'Pickup plan created for dismissal.',
     ),
   ];
 
-  List<ReleaseEvent> get releaseEvents => [
+  static List<ReleaseEvent> _seedReleaseEvents() => [
     ReleaseEvent(
       id: 'release_noah',
       schoolId: primarySchoolId,
       studentId: 'student_noah',
       guardianId: 'guardian_rohan',
-      staffId: 'dev-staff-1',
+      staffId: staffUserId,
       staffName: 'Ms. Carson',
       releasedAt: DateTime.parse('2026-03-17T19:12:30Z'),
-      verificationMethod: 'nfc',
-      notes: 'Released from South Gate after NFC verification.',
+      verificationMethod: 'manual-confirmed',
+      notes: 'Release confirmed after verified status.',
     ),
   ];
 
-  List<SchoolAnnouncement> get announcements => [
+  static List<SchoolAnnouncement> _seedAnnouncements() => [
     SchoolAnnouncement(
       id: 'announcement_weather',
       schoolId: primarySchoolId,
@@ -195,7 +369,7 @@ class MockDataStore {
     ),
   ];
 
-  List<EmergencyNotice> get emergencyNotices => [
+  static List<EmergencyNotice> _seedEmergencyNotices() => [
     EmergencyNotice(
       id: 'emergency_drill',
       schoolId: primarySchoolId,
@@ -208,13 +382,13 @@ class MockDataStore {
     ),
   ];
 
-  List<PickupQueueEntry> get queueEntries => const [
+  static List<PickupQueueEntry> _seedQueueEntries() => const [
     PickupQueueEntry(
       id: 'queue_maya',
       schoolId: primarySchoolId,
       studentId: 'student_maya',
       studentName: 'Maya Brooks',
-      guardianId: 'guardian_andrea',
+      guardianId: parentGuardianId,
       guardianName: 'Andrea Brooks',
       homeroom: 'Grade 2 - Cedar',
       pickupZone: 'North Loop',
@@ -244,13 +418,13 @@ class MockDataStore {
       guardianName: 'Lena Hernandez',
       homeroom: 'Kindergarten - Maple',
       pickupZone: 'North Loop',
-      etaLabel: 'Queued',
-      eventType: PickupEventType.queued,
+      etaLabel: 'Pending',
+      eventType: PickupEventType.pending,
       isNfcVerified: false,
     ),
   ];
 
-  List<AuditTrailEntry> get auditTrail => [
+  static List<AuditTrailEntry> _seedAuditTrail() => [
     AuditTrailEntry(
       id: 'audit_release_noah',
       schoolId: primarySchoolId,
@@ -258,25 +432,16 @@ class MockDataStore {
       action: 'Released',
       actorName: 'Ms. Carson',
       occurredAt: DateTime.parse('2026-03-17T19:12:30Z'),
-      notes: 'Verified on-site by NFC tap at South Gate.',
+      notes: 'Release confirmed after verified status.',
     ),
     AuditTrailEntry(
       id: 'audit_pickup_maya',
       schoolId: primarySchoolId,
       studentName: 'Maya Brooks',
-      action: 'Queued',
+      action: 'Approaching',
       actorName: 'System',
       occurredAt: DateTime.parse('2026-03-17T19:09:00Z'),
-      notes: 'Guardian entered geofence radius near North Loop.',
-    ),
-    AuditTrailEntry(
-      id: 'audit_delegate_ava',
-      schoolId: primarySchoolId,
-      studentName: 'Ava Hernandez',
-      action: 'Delegate approved',
-      actorName: 'Front Office',
-      occurredAt: DateTime.parse('2026-03-17T17:42:00Z'),
-      notes: 'Temporary guardian window approved for Lena Hernandez.',
+      notes: 'Guardian entered pickup radius near North Loop.',
     ),
   ];
 }

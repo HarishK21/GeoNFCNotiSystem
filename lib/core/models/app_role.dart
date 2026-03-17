@@ -3,7 +3,7 @@ enum AppRole {
     label: 'Parent/Guardian',
     description:
         'View approaching students, temporary delegates, and release updates.',
-    defaultRoute: '/parent/home',
+    defaultRoute: '/parent/plan',
   ),
   staff(
     label: 'Teacher/Staff',

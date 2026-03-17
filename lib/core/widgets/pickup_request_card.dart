@@ -32,8 +32,9 @@ class PickupRequestCard extends StatelessWidget {
                     children: [
                       Text(
                         request.studentName,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -71,11 +72,11 @@ class PickupRequestCard extends StatelessWidget {
                 ),
                 StatusPill(
                   label: request.isNfcVerified
-                      ? 'NFC verified'
-                      : 'Awaiting NFC tap',
+                      ? 'Verified on-site'
+                      : 'Verification pending',
                   icon: request.isNfcVerified
-                      ? Icons.nfc_rounded
-                      : Icons.nfc_outlined,
+                      ? Icons.verified_user_rounded
+                      : Icons.pending_actions_rounded,
                   backgroundColor: request.isNfcVerified
                       ? colorScheme.tertiaryContainer
                       : colorScheme.surface,
@@ -91,24 +92,48 @@ class PickupRequestCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (request.hasException) ...[
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.flag_rounded,
+                    color: colorScheme.error,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      request.exceptionFlag!,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (showReleaseState) ...[
               const SizedBox(height: 14),
               Row(
                 children: [
                   Icon(
-                    request.canRelease
-                        ? Icons.verified_rounded
-                        : Icons.pending_actions_rounded,
-                    color: request.canRelease
-                        ? colorScheme.primary
-                        : colorScheme.error,
+                    request.isReleased
+                        ? Icons.task_alt_rounded
+                        : (request.canRelease
+                              ? Icons.verified_rounded
+                              : Icons.pending_actions_rounded),
+                    color: request.isReleased
+                        ? colorScheme.tertiary
+                        : (request.canRelease
+                              ? colorScheme.primary
+                              : colorScheme.error),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      request.canRelease
-                          ? 'Staff can release this student now.'
-                          : 'Release is blocked until on-site NFC verification completes.',
+                      _releaseMessage(),
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ),
@@ -121,29 +146,45 @@ class PickupRequestCard extends StatelessWidget {
     );
   }
 
+  String _releaseMessage() {
+    if (request.isReleased) {
+      return 'This student has already been released.';
+    }
+    if (request.canRelease) {
+      return 'Staff can release this student now.';
+    }
+    if (request.canVerify) {
+      return 'Staff can verify this student next, then confirm release.';
+    }
+    return 'This pickup is not ready for release yet.';
+  }
+
   IconData _presenceIcon(PresenceState state) {
     return switch (state) {
-      PresenceState.queued => Icons.schedule_rounded,
+      PresenceState.pending => Icons.schedule_rounded,
       PresenceState.approaching => Icons.near_me_rounded,
       PresenceState.verified => Icons.verified_user_rounded,
+      PresenceState.released => Icons.task_alt_rounded,
     };
   }
 
   Color _presenceBackground(BuildContext context, PresenceState state) {
     final colorScheme = Theme.of(context).colorScheme;
     return switch (state) {
-      PresenceState.queued => colorScheme.surface,
+      PresenceState.pending => colorScheme.surface,
       PresenceState.approaching => colorScheme.secondaryContainer,
       PresenceState.verified => colorScheme.primaryContainer,
+      PresenceState.released => colorScheme.tertiaryContainer,
     };
   }
 
   Color _presenceForeground(BuildContext context, PresenceState state) {
     final colorScheme = Theme.of(context).colorScheme;
     return switch (state) {
-      PresenceState.queued => colorScheme.onSurfaceVariant,
+      PresenceState.pending => colorScheme.onSurfaceVariant,
       PresenceState.approaching => colorScheme.onSecondaryContainer,
       PresenceState.verified => colorScheme.onPrimaryContainer,
+      PresenceState.released => colorScheme.onTertiaryContainer,
     };
   }
 }

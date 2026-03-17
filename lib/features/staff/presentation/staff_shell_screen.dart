@@ -10,8 +10,8 @@ class StaffShellScreen extends StatelessWidget {
 
   static const _titles = [
     'Staff Queue',
-    'Verification',
-    'Announcements',
+    'Student Lookup',
+    'Exception Flags',
     'Audit Trail',
   ];
 
@@ -28,14 +28,14 @@ class StaffShellScreen extends StatelessWidget {
           label: 'Queue',
         ),
         NavigationDestination(
-          icon: Icon(Icons.nfc_outlined),
-          selectedIcon: Icon(Icons.nfc_rounded),
-          label: 'Verify',
+          icon: Icon(Icons.search_outlined),
+          selectedIcon: Icon(Icons.search_rounded),
+          label: 'Students',
         ),
         NavigationDestination(
-          icon: Icon(Icons.campaign_outlined),
-          selectedIcon: Icon(Icons.campaign_rounded),
-          label: 'Alerts',
+          icon: Icon(Icons.flag_outlined),
+          selectedIcon: Icon(Icons.flag_rounded),
+          label: 'Flags',
         ),
         NavigationDestination(
           icon: Icon(Icons.receipt_long_outlined),

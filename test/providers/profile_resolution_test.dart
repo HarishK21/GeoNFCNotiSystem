@@ -14,9 +14,12 @@ void main() {
     addTearDown(container.dispose);
     final profileSubscription = container.listen(
       currentUserProfileStreamProvider,
-      (_, __) {},
+      (previous, next) {},
     );
-    final queueSubscription = container.listen(queueEntriesStreamProvider, (_, __) {});
+    final queueSubscription = container.listen(
+      queueEntriesStreamProvider,
+      (previous, next) {},
+    );
     addTearDown(profileSubscription.close);
     addTearDown(queueSubscription.close);
 
@@ -57,7 +60,7 @@ void main() {
     addTearDown(container.dispose);
     final profileSubscription = container.listen(
       currentUserProfileStreamProvider,
-      (_, __) {},
+      (previous, next) {},
     );
     addTearDown(profileSubscription.close);
 
@@ -80,11 +83,11 @@ void main() {
       addTearDown(container.dispose);
       final announcementsSubscription = container.listen(
         schoolAnnouncementsStreamProvider,
-        (_, __) {},
+        (previous, next) {},
       );
       final emergencySubscription = container.listen(
         emergencyNoticesStreamProvider,
-        (_, __) {},
+        (previous, next) {},
       );
       addTearDown(announcementsSubscription.close);
       addTearDown(emergencySubscription.close);

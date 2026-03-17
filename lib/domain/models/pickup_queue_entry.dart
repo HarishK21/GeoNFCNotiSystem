@@ -13,6 +13,7 @@ class PickupQueueEntry {
     required this.etaLabel,
     required this.eventType,
     required this.isNfcVerified,
+    this.exceptionFlag,
   });
 
   final String id;
@@ -26,6 +27,46 @@ class PickupQueueEntry {
   final String etaLabel;
   final PickupEventType eventType;
   final bool isNfcVerified;
+  final String? exceptionFlag;
+
+  bool get canMarkApproaching => eventType == PickupEventType.pending;
+  bool get canVerify => eventType == PickupEventType.approaching;
+  bool get canRelease => eventType == PickupEventType.verified;
+  bool get isReleased => eventType == PickupEventType.released;
+  bool get hasException => exceptionFlag != null && exceptionFlag!.isNotEmpty;
+
+  PickupQueueEntry copyWith({
+    String? id,
+    String? schoolId,
+    String? studentId,
+    String? studentName,
+    String? guardianId,
+    String? guardianName,
+    String? homeroom,
+    String? pickupZone,
+    String? etaLabel,
+    PickupEventType? eventType,
+    bool? isNfcVerified,
+    String? exceptionFlag,
+    bool clearExceptionFlag = false,
+  }) {
+    return PickupQueueEntry(
+      id: id ?? this.id,
+      schoolId: schoolId ?? this.schoolId,
+      studentId: studentId ?? this.studentId,
+      studentName: studentName ?? this.studentName,
+      guardianId: guardianId ?? this.guardianId,
+      guardianName: guardianName ?? this.guardianName,
+      homeroom: homeroom ?? this.homeroom,
+      pickupZone: pickupZone ?? this.pickupZone,
+      etaLabel: etaLabel ?? this.etaLabel,
+      eventType: eventType ?? this.eventType,
+      isNfcVerified: isNfcVerified ?? this.isNfcVerified,
+      exceptionFlag: clearExceptionFlag
+          ? null
+          : (exceptionFlag ?? this.exceptionFlag),
+    );
+  }
 
   factory PickupQueueEntry.fromMap(Map<String, dynamic> map, {String? id}) {
     return PickupQueueEntry(
@@ -40,9 +81,10 @@ class PickupQueueEntry {
       etaLabel: map['etaLabel'] as String,
       eventType: PickupEventType.values.firstWhere(
         (value) => value.name == map['eventType'],
-        orElse: () => PickupEventType.queued,
+        orElse: () => PickupEventType.pending,
       ),
       isNfcVerified: map['isNfcVerified'] as bool? ?? false,
+      exceptionFlag: map['exceptionFlag'] as String?,
     );
   }
 
@@ -59,6 +101,7 @@ class PickupQueueEntry {
       'etaLabel': etaLabel,
       'eventType': eventType.name,
       'isNfcVerified': isNfcVerified,
+      'exceptionFlag': exceptionFlag,
     };
   }
 }

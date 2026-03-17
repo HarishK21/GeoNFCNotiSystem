@@ -9,9 +9,9 @@ class ParentShellScreen extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
 
   static const _titles = [
-    'Parent Overview',
-    'Today\'s Pickup Queue',
-    'Delegation',
+    'Today\'s Pickup Plan',
+    'Manage Guardians',
+    'Pickup History',
     'Announcements',
   ];
 
@@ -25,17 +25,17 @@ class ParentShellScreen extends StatelessWidget {
         NavigationDestination(
           icon: Icon(Icons.home_outlined),
           selectedIcon: Icon(Icons.home_rounded),
-          label: 'Home',
+          label: 'Plan',
         ),
         NavigationDestination(
-          icon: Icon(Icons.queue_outlined),
-          selectedIcon: Icon(Icons.queue_rounded),
-          label: 'Queue',
+          icon: Icon(Icons.people_outline_rounded),
+          selectedIcon: Icon(Icons.people_rounded),
+          label: 'Guardians',
         ),
         NavigationDestination(
-          icon: Icon(Icons.group_add_outlined),
-          selectedIcon: Icon(Icons.group_add_rounded),
-          label: 'Delegation',
+          icon: Icon(Icons.history_outlined),
+          selectedIcon: Icon(Icons.history_rounded),
+          label: 'History',
         ),
         NavigationDestination(
           icon: Icon(Icons.campaign_outlined),

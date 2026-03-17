@@ -8,6 +8,7 @@ class UserProfile {
     required this.displayName,
     required this.email,
     this.phone,
+    this.linkedGuardianId,
   });
 
   final String uid;
@@ -16,6 +17,7 @@ class UserProfile {
   final String displayName;
   final String email;
   final String? phone;
+  final String? linkedGuardianId;
 
   factory UserProfile.fromMap(Map<String, dynamic> map) {
     return UserProfile(
@@ -25,6 +27,7 @@ class UserProfile {
       displayName: map['displayName'] as String,
       email: map['email'] as String,
       phone: map['phone'] as String?,
+      linkedGuardianId: map['linkedGuardianId'] as String?,
     );
   }
 
@@ -36,6 +39,7 @@ class UserProfile {
       'displayName': displayName,
       'email': email,
       'phone': phone,
+      'linkedGuardianId': linkedGuardianId,
     };
   }
 }

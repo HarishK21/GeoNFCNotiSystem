@@ -1,3 +1,4 @@
+import '../../core/models/app_role.dart';
 import '../../domain/models/audit_trail_entry.dart';
 import '../../domain/models/emergency_notice.dart';
 import '../../domain/models/guardian.dart';
@@ -23,15 +24,35 @@ import '../../domain/repositories/user_profile_repository.dart';
 import 'mock_data_store.dart';
 
 class MockAuthRepository implements AuthRepository {
-  const MockAuthRepository(this._currentUserId);
+  const MockAuthRepository(this._store);
 
-  final String _currentUserId;
-
-  @override
-  String? getCurrentUserId() => _currentUserId;
+  final MockDataStore _store;
 
   @override
-  Stream<String?> watchCurrentUserId() => Stream<String?>.value(_currentUserId);
+  String? getCurrentUserId() => _store.currentUserId;
+
+  @override
+  bool get supportsCredentialSignIn => false;
+
+  @override
+  bool get supportsDemoSignIn => true;
+
+  @override
+  Future<void> signInAsDemoRole(AppRole role) => _store.signInAsRole(role);
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    throw UnsupportedError('Mock auth only supports demo sign-in.');
+  }
+
+  @override
+  Future<void> signOut() => _store.signOut();
+
+  @override
+  Stream<String?> watchCurrentUserId() => _store.watchCurrentUserId();
 }
 
 class MockUserProfileRepository implements UserProfileRepository {
@@ -40,15 +61,8 @@ class MockUserProfileRepository implements UserProfileRepository {
   final MockDataStore _store;
 
   @override
-  Stream<UserProfile?> watchProfile(String uid) {
-    UserProfile? profile;
-    for (final item in _store.userProfiles) {
-      if (item.uid == uid) {
-        profile = item;
-        break;
-      }
-    }
-    return Stream<UserProfile?>.value(profile);
+  Stream<UserProfile?> watchProfile(String uid) async* {
+    yield _store.userProfiles.where((item) => item.uid == uid).firstOrNull;
   }
 }
 
@@ -95,12 +109,13 @@ class MockPickupPermissionRepository implements PickupPermissionRepository {
   final MockDataStore _store;
 
   @override
+  Future<void> createPermission(PickupPermission permission) {
+    return _store.createPermission(permission);
+  }
+
+  @override
   Stream<List<PickupPermission>> watchPermissions(String schoolId) {
-    return Stream.value(
-      _store.pickupPermissions
-          .where((item) => item.schoolId == schoolId)
-          .toList(growable: false),
-    );
+    return _store.watchPermissions(schoolId);
   }
 }
 
@@ -110,12 +125,13 @@ class MockPickupEventRepository implements PickupEventRepository {
   final MockDataStore _store;
 
   @override
+  Future<void> logPickupEvent(PickupEvent event) {
+    return _store.logPickupEvent(event);
+  }
+
+  @override
   Stream<List<PickupEvent>> watchPickupEvents(String schoolId) {
-    return Stream.value(
-      _store.pickupEvents
-          .where((item) => item.schoolId == schoolId)
-          .toList(growable: false),
-    );
+    return _store.watchPickupEvents(schoolId);
   }
 }
 
@@ -125,12 +141,13 @@ class MockReleaseEventRepository implements ReleaseEventRepository {
   final MockDataStore _store;
 
   @override
+  Future<void> createReleaseEvent(ReleaseEvent event) {
+    return _store.createReleaseEvent(event);
+  }
+
+  @override
   Stream<List<ReleaseEvent>> watchReleaseEvents(String schoolId) {
-    return Stream.value(
-      _store.releaseEvents
-          .where((item) => item.schoolId == schoolId)
-          .toList(growable: false),
-    );
+    return _store.watchReleaseEvents(schoolId);
   }
 }
 
@@ -141,20 +158,12 @@ class MockNoticeRepository implements NoticeRepository {
 
   @override
   Stream<List<SchoolAnnouncement>> watchAnnouncements(String schoolId) {
-    return Stream.value(
-      _store.announcements
-          .where((item) => item.schoolId == schoolId)
-          .toList(growable: false),
-    );
+    return _store.watchAnnouncements(schoolId);
   }
 
   @override
   Stream<List<EmergencyNotice>> watchEmergencyNotices(String schoolId) {
-    return Stream.value(
-      _store.emergencyNotices
-          .where((item) => item.schoolId == schoolId)
-          .toList(growable: false),
-    );
+    return _store.watchEmergencyNotices(schoolId);
   }
 }
 
@@ -164,12 +173,13 @@ class MockQueueRepository implements QueueRepository {
   final MockDataStore _store;
 
   @override
+  Future<void> saveQueueEntry(PickupQueueEntry entry) {
+    return _store.saveQueueEntry(entry);
+  }
+
+  @override
   Stream<List<PickupQueueEntry>> watchQueue(String schoolId) {
-    return Stream.value(
-      _store.queueEntries
-          .where((item) => item.schoolId == schoolId)
-          .toList(growable: false),
-    );
+    return _store.watchQueue(schoolId);
   }
 }
 
@@ -179,11 +189,16 @@ class MockAuditRepository implements AuditRepository {
   final MockDataStore _store;
 
   @override
-  Stream<List<AuditTrailEntry>> watchAuditTrail(String schoolId) {
-    return Stream.value(
-      _store.auditTrail
-          .where((item) => item.schoolId == schoolId)
-          .toList(growable: false),
-    );
+  Future<void> appendAuditEntry(AuditTrailEntry entry) {
+    return _store.appendAuditEntry(entry);
   }
+
+  @override
+  Stream<List<AuditTrailEntry>> watchAuditTrail(String schoolId) {
+    return _store.watchAuditTrail(schoolId);
+  }
+}
+
+extension _FirstOrNullExtension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

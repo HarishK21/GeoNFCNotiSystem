@@ -31,7 +31,9 @@ final appEnvironmentProvider = Provider<AppEnvironment>((ref) {
 });
 
 final mockDataStoreProvider = Provider<MockDataStore>((ref) {
-  return const MockDataStore();
+  final store = MockDataStore();
+  ref.onDispose(store.dispose);
+  return store;
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -39,7 +41,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   if (environment.dataSource == AppDataSource.firebase) {
     return FirestoreAuthRepository(FirebaseAuth.instance);
   }
-  return const MockAuthRepository(MockDataStore.currentUserId);
+  return MockAuthRepository(ref.watch(mockDataStoreProvider));
 });
 
 final userProfileRepositoryProvider = Provider<UserProfileRepository>((ref) {

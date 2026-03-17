@@ -1,4 +1,4 @@
-enum PickupEventType { queued, approaching, verified }
+enum PickupEventType { pending, approaching, verified, released }
 
 enum PickupEventSource { manual, geofence, nfc }
 
@@ -27,7 +27,8 @@ class PickupEvent {
   final String? actorName;
   final String? notes;
 
-  bool get isNfcVerified => type == PickupEventType.verified;
+  bool get isNfcVerified =>
+      type == PickupEventType.verified || type == PickupEventType.released;
 
   factory PickupEvent.fromMap(Map<String, dynamic> map, {String? id}) {
     return PickupEvent(
@@ -37,7 +38,7 @@ class PickupEvent {
       guardianId: map['guardianId'] as String,
       type: PickupEventType.values.firstWhere(
         (value) => value.name == map['type'],
-        orElse: () => PickupEventType.queued,
+        orElse: () => PickupEventType.pending,
       ),
       source: PickupEventSource.values.firstWhere(
         (value) => value.name == map['source'],

@@ -14,8 +14,11 @@ class ParentHomeScreen extends ConsumerWidget {
     final environment = ref.watch(appEnvironmentProvider);
     final queue = ref.watch(pickupQueueProvider);
     final activeDelegates = ref.watch(activeDelegatesProvider);
-    final latestAnnouncement = ref.watch(announcementsProvider).first;
-    final nextPickup = queue.first;
+    final announcements = ref.watch(announcementsProvider);
+    final latestAnnouncement = announcements.isNotEmpty
+        ? announcements.first
+        : null;
+    final nextPickup = queue.isNotEmpty ? queue.first : null;
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -24,7 +27,7 @@ class ParentHomeScreen extends ConsumerWidget {
           DashboardCard(
             title: 'Running without Firebase',
             subtitle:
-                'The app shell uses local mock data until Auth, Firestore, and FCM are configured.',
+                'The app shell uses local mock data until Auth and Firestore are configured.',
             icon: Icons.cloud_off_rounded,
             child: const Text(
               'Navigation, theme, and dismissal concepts are ready now, so the team can iterate on flow before backend wiring.',
@@ -36,47 +39,53 @@ class ParentHomeScreen extends ConsumerWidget {
           title: 'Dismissal status at a glance',
           subtitle: 'Geofence means approaching. NFC means verified on-site.',
           icon: Icons.route_rounded,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  StatusPill(
-                    label: nextPickup.presenceState.label,
-                    icon: nextPickup.presenceState == PresenceState.approaching
-                        ? Icons.near_me_rounded
-                        : Icons.schedule_rounded,
-                    backgroundColor: Theme.of(
-                      context,
-                    ).colorScheme.secondaryContainer,
-                    foregroundColor: Theme.of(
-                      context,
-                    ).colorScheme.onSecondaryContainer,
-                  ),
-                  StatusPill(
-                    label: nextPickup.isNfcVerified
-                        ? 'Verified on-site'
-                        : 'Awaiting NFC tap',
-                    icon: nextPickup.isNfcVerified
-                        ? Icons.nfc_rounded
-                        : Icons.nfc_outlined,
-                    backgroundColor: nextPickup.isNfcVerified
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.surface,
-                    foregroundColor: nextPickup.isNfcVerified
-                        ? Theme.of(context).colorScheme.onPrimaryContainer
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '${nextPickup.studentName} is currently tied to ${nextPickup.guardianName} at ${nextPickup.pickupZone}. Staff release stays locked until NFC verification succeeds.',
-              ),
-            ],
-          ),
+          child: nextPickup == null
+              ? const Text(
+                  'Waiting for queue data. The app remains stable even before repository streams emit.',
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        StatusPill(
+                          label: nextPickup.presenceState.label,
+                          icon:
+                              nextPickup.presenceState ==
+                                  PresenceState.approaching
+                              ? Icons.near_me_rounded
+                              : Icons.schedule_rounded,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.secondaryContainer,
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onSecondaryContainer,
+                        ),
+                        StatusPill(
+                          label: nextPickup.isNfcVerified
+                              ? 'Verified on-site'
+                              : 'Awaiting NFC tap',
+                          icon: nextPickup.isNfcVerified
+                              ? Icons.nfc_rounded
+                              : Icons.nfc_outlined,
+                          backgroundColor: nextPickup.isNfcVerified
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : Theme.of(context).colorScheme.surface,
+                          foregroundColor: nextPickup.isNfcVerified
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '${nextPickup.studentName} is currently tied to ${nextPickup.guardianName} at ${nextPickup.pickupZone}. Staff release stays locked until NFC verification succeeds.',
+                    ),
+                  ],
+                ),
         ),
         const SizedBox(height: 16),
         DashboardCard(
@@ -124,10 +133,15 @@ class ParentHomeScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         DashboardCard(
-          title: latestAnnouncement.title,
-          subtitle: latestAnnouncement.sentAtLabel,
+          title: latestAnnouncement?.title ?? 'Announcements will appear here',
+          subtitle:
+              latestAnnouncement?.sentAtLabel ??
+              'Waiting for announcement feed data.',
           icon: Icons.campaign_rounded,
-          child: Text(latestAnnouncement.body),
+          child: Text(
+            latestAnnouncement?.body ??
+                'The repository layer is active, but no announcement documents have been emitted yet.',
+          ),
         ),
       ],
     );

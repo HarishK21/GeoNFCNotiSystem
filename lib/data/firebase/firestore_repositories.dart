@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 
+import '../../core/models/app_role.dart';
 import '../../domain/models/audit_trail_entry.dart';
 import '../../domain/models/emergency_notice.dart';
 import '../../domain/models/guardian.dart';
@@ -32,6 +33,28 @@ class FirestoreAuthRepository implements AuthRepository {
 
   @override
   String? getCurrentUserId() => _auth.currentUser?.uid;
+
+  @override
+  bool get supportsCredentialSignIn => true;
+
+  @override
+  bool get supportsDemoSignIn => false;
+
+  @override
+  Future<void> signInAsDemoRole(AppRole role) {
+    throw UnsupportedError('Firebase auth does not support demo sign-in.');
+  }
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) {
+    return _auth.signInWithEmailAndPassword(email: email, password: password);
+  }
+
+  @override
+  Future<void> signOut() => _auth.signOut();
 
   @override
   Stream<String?> watchCurrentUserId() =>
@@ -140,6 +163,20 @@ class FirestorePickupPermissionRepository
               .toList(growable: false),
         );
   }
+
+  @override
+  Future<void> createPermission(PickupPermission permission) {
+    return _firestore
+        .collection('schools')
+        .doc(permission.schoolId)
+        .collection('pickupPermissions')
+        .doc(permission.id)
+        .set({
+          ...permission.toMap(),
+          'startsAt': Timestamp.fromDate(permission.startsAt),
+          'endsAt': Timestamp.fromDate(permission.endsAt),
+        });
+  }
 }
 
 class FirestorePickupEventRepository implements PickupEventRepository {
@@ -169,6 +206,19 @@ class FirestorePickupEventRepository implements PickupEventRepository {
               .toList(growable: false),
         );
   }
+
+  @override
+  Future<void> logPickupEvent(PickupEvent event) {
+    return _firestore
+        .collection('schools')
+        .doc(event.schoolId)
+        .collection('pickupEvents')
+        .doc(event.id)
+        .set({
+          ...event.toMap(),
+          'occurredAt': Timestamp.fromDate(event.occurredAt),
+        });
+  }
 }
 
 class FirestoreReleaseEventRepository implements ReleaseEventRepository {
@@ -197,6 +247,19 @@ class FirestoreReleaseEventRepository implements ReleaseEventRepository {
               })
               .toList(growable: false),
         );
+  }
+
+  @override
+  Future<void> createReleaseEvent(ReleaseEvent event) {
+    return _firestore
+        .collection('schools')
+        .doc(event.schoolId)
+        .collection('releaseEvents')
+        .doc(event.id)
+        .set({
+          ...event.toMap(),
+          'releasedAt': Timestamp.fromDate(event.releasedAt),
+        });
   }
 }
 
@@ -267,6 +330,16 @@ class FirestoreQueueRepository implements QueueRepository {
               .toList(growable: false),
         );
   }
+
+  @override
+  Future<void> saveQueueEntry(PickupQueueEntry entry) {
+    return _firestore
+        .collection('schools')
+        .doc(entry.schoolId)
+        .collection('queue')
+        .doc(entry.id)
+        .set(entry.toMap());
+  }
 }
 
 class FirestoreAuditRepository implements AuditRepository {
@@ -295,5 +368,18 @@ class FirestoreAuditRepository implements AuditRepository {
               })
               .toList(growable: false),
         );
+  }
+
+  @override
+  Future<void> appendAuditEntry(AuditTrailEntry entry) {
+    return _firestore
+        .collection('schools')
+        .doc(entry.schoolId)
+        .collection('auditTrail')
+        .doc(entry.id)
+        .set({
+          ...entry.toMap(),
+          'occurredAt': Timestamp.fromDate(entry.occurredAt),
+        });
   }
 }

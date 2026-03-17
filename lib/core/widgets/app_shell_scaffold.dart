@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class AppShellScaffold extends StatelessWidget {
+import '../providers/app_providers.dart';
+
+class AppShellScaffold extends ConsumerWidget {
   const AppShellScaffold({
     super.key,
     required this.roleLabel,
@@ -20,17 +22,48 @@ class AppShellScaffold extends StatelessWidget {
   final Widget body;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(currentUserProfileProvider);
+    final authAction = ref.watch(authActionControllerProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
         actions: [
-          TextButton.icon(
-            onPressed: () => context.go('/'),
-            icon: const Icon(Icons.swap_horiz_rounded),
-            label: Text(roleLabel),
-          ),
-          const SizedBox(width: 8),
+          if (profile != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: PopupMenuButton<String>(
+                icon: const Icon(Icons.account_circle_outlined),
+                onSelected: (value) {
+                  if (value == 'sign-out') {
+                    ref.read(authActionControllerProvider.notifier).signOut();
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem<String>(
+                    enabled: false,
+                    value: 'profile',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(profile.displayName),
+                        Text(
+                          roleLabel,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem<String>(
+                    value: 'sign-out',
+                    enabled: !authAction.isLoading,
+                    child: const Text('Sign out'),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
       body: SafeArea(child: body),
