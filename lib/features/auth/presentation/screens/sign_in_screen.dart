@@ -102,7 +102,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                               onPressed: authAction.isLoading
                                   ? null
                                   : () => ref
-                                        .read(authActionControllerProvider.notifier)
+                                        .read(
+                                          authActionControllerProvider.notifier,
+                                        )
                                         .signInAsDemoRole(AppRole.parent),
                               icon: const Icon(Icons.family_restroom_rounded),
                               label: const Text('Continue as Parent Demo'),
@@ -115,7 +117,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                               onPressed: authAction.isLoading
                                   ? null
                                   : () => ref
-                                        .read(authActionControllerProvider.notifier)
+                                        .read(
+                                          authActionControllerProvider.notifier,
+                                        )
                                         .signInAsDemoRole(AppRole.staff),
                               icon: const Icon(Icons.badge_rounded),
                               label: const Text('Continue as Staff Demo'),
@@ -156,7 +160,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                               onPressed: authAction.isLoading
                                   ? null
                                   : () => ref
-                                        .read(authActionControllerProvider.notifier)
+                                        .read(
+                                          authActionControllerProvider.notifier,
+                                        )
                                         .signInWithEmailPassword(
                                           email: _emailController.text.trim(),
                                           password: _passwordController.text,

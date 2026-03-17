@@ -31,7 +31,6 @@ class MockDataStore {
   static const parentUserId = 'dev-parent-1';
   static const staffUserId = 'dev-staff-1';
   static const parentGuardianId = 'guardian_andrea';
-  static const currentUserId = parentUserId;
 
   final School school = const School(
     id: primarySchoolId,
@@ -73,7 +72,8 @@ class MockDataStore {
       List.unmodifiable(_pickupPermissions);
   List<PickupEvent> get pickupEvents => List.unmodifiable(_pickupEvents);
   List<ReleaseEvent> get releaseEvents => List.unmodifiable(_releaseEvents);
-  List<SchoolAnnouncement> get announcements => List.unmodifiable(_announcements);
+  List<SchoolAnnouncement> get announcements =>
+      List.unmodifiable(_announcements);
   List<EmergencyNotice> get emergencyNotices =>
       List.unmodifiable(_emergencyNotices);
   List<PickupQueueEntry> get queueEntries => List.unmodifiable(_queueEntries);
@@ -197,9 +197,9 @@ class MockDataStore {
     String schoolId,
     String Function(T item) selector,
   ) {
-    return items.where((item) => selector(item) == schoolId).toList(
-      growable: false,
-    );
+    return items
+        .where((item) => selector(item) == schoolId)
+        .toList(growable: false);
   }
 
   static List<UserProfile> _seedUserProfiles() => const [
@@ -382,7 +382,7 @@ class MockDataStore {
     ),
   ];
 
-  static List<PickupQueueEntry> _seedQueueEntries() => const [
+  static List<PickupQueueEntry> _seedQueueEntries() => [
     PickupQueueEntry(
       id: 'queue_maya',
       schoolId: primarySchoolId,

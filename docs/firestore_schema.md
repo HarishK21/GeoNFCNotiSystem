@@ -19,6 +19,7 @@ Fields:
 - `displayName`: string
 - `email`: string
 - `phone`: string or null
+- `linkedGuardianId`: string or null
 
 ## School Root
 
@@ -81,7 +82,7 @@ Fields:
 - `schoolId`: string
 - `studentId`: string
 - `guardianId`: string
-- `type`: `queued`, `approaching`, or `verified`
+- `type`: `pending`, `approaching`, `verified`, or `released`
 - `source`: `manual`, `geofence`, or `nfc`
 - `pickupZone`: string
 - `occurredAt`: timestamp
@@ -135,8 +136,9 @@ Fields:
 - `homeroom`: string
 - `pickupZone`: string
 - `etaLabel`: string
-- `eventType`: `queued`, `approaching`, or `verified`
+- `eventType`: `pending`, `approaching`, `verified`, or `released`
 - `isNfcVerified`: bool
+- `exceptionFlag`: string or null
 
 ### `schools/{schoolId}/auditTrail/{auditEntryId}`
 
@@ -151,6 +153,7 @@ Fields:
 ## Repository Mapping Notes
 
 - Firebase Auth resolves the UID only.
-- `userProfiles/{uid}` resolves the app role and `schoolId`.
-- Role-specific screens can continue to share one app shell while the backend controls the authenticated profile.
+- `userProfiles/{uid}` resolves the app role, `schoolId`, and optional linked guardian record.
+- Role-specific screens share one router while provider guards enforce role access from the resolved profile.
 - `queue` and `auditTrail` are projection collections so the UI does not need to join multiple collections just to paint the queue or event history.
+- Queue mutations should be written through app logic that preserves the allowed progression: `pending -> approaching -> verified -> released`.

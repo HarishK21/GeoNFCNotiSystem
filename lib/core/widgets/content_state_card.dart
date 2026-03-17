@@ -27,10 +27,6 @@ class ContentStateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DashboardCard(
-      title: title,
-      icon: icon,
-      child: Text(message),
-    );
+    return DashboardCard(title: title, icon: icon, child: Text(message));
   }
 }

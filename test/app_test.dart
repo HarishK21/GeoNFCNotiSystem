@@ -1,28 +1,30 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'package:geo_tap_guardian/app/app.dart';
 
 void main() {
-  testWidgets('opens parent flow from role selection', (tester) async {
+  testWidgets('sign-in screen opens and parent demo routes to parent flow', (
+    tester,
+  ) async {
     await tester.pumpWidget(const ProviderScope(child: GeoTapGuardianApp()));
-
-    expect(find.text('GeoTap Guardian'), findsOneWidget);
-    expect(find.text('Parent/Guardian'), findsOneWidget);
-
-    final parentButton = find.text('Open Parent/Guardian view');
-    await tester.ensureVisible(parentButton);
-    await tester.tap(parentButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Parent Overview'), findsOneWidget);
-    expect(find.text('Dismissal status at a glance'), findsOneWidget);
+    expect(find.text('GeoTap Guardian'), findsOneWidget);
+    expect(find.text('Continue as Parent Demo'), findsOneWidget);
+
+    await tester.tap(find.text('Continue as Parent Demo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Today\'s Pickup Plan'), findsOneWidget);
+    expect(find.text('Today\'s pickup rules'), findsOneWidget);
   });
 
-  testWidgets('opens staff flow from role selection', (tester) async {
+  testWidgets('staff demo routes to guarded staff flow', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: GeoTapGuardianApp()));
+    await tester.pumpAndSettle();
 
-    final staffButton = find.text('Open Teacher/Staff view');
+    final staffButton = find.text('Continue as Staff Demo');
     await tester.ensureVisible(staffButton);
     await tester.tap(staffButton);
     await tester.pumpAndSettle();

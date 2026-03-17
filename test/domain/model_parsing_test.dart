@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:geo_tap_guardian/core/models/app_role.dart';
 import 'package:geo_tap_guardian/domain/models/emergency_notice.dart';
+import 'package:geo_tap_guardian/domain/models/pickup_queue_entry.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_permission.dart';
 import 'package:geo_tap_guardian/domain/models/user_profile.dart';
 
@@ -14,11 +15,13 @@ void main() {
       'displayName': 'Ms. Carson',
       'email': 'mcarson@example.com',
       'phone': '+1-555-0100',
+      'linkedGuardianId': 'guardian_1',
     });
 
     expect(profile.uid, 'user_1');
     expect(profile.role, AppRole.staff);
     expect(profile.phone, '+1-555-0100');
+    expect(profile.linkedGuardianId, 'guardian_1');
   });
 
   test('pickup permission parsing resolves time window and status', () {
@@ -55,4 +58,28 @@ void main() {
     expect(notice.severity, EmergencySeverity.critical);
     expect(notice.isActive, isTrue);
   });
+
+  test(
+    'pickup queue entry parsing resolves released state and exception flag',
+    () {
+      final entry = PickupQueueEntry.fromMap({
+        'id': 'queue_1',
+        'schoolId': 'school_1',
+        'studentId': 'student_1',
+        'studentName': 'Maya Brooks',
+        'guardianId': 'guardian_1',
+        'guardianName': 'Andrea Brooks',
+        'homeroom': 'Grade 2 - Cedar',
+        'pickupZone': 'North Loop',
+        'etaLabel': 'Released',
+        'eventType': 'released',
+        'isNfcVerified': true,
+        'exceptionFlag': 'ID check completed',
+      });
+
+      expect(entry.eventType.name, 'released');
+      expect(entry.isReleased, isTrue);
+      expect(entry.exceptionFlag, 'ID check completed');
+    },
+  );
 }

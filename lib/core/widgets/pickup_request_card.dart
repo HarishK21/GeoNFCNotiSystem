@@ -9,10 +9,12 @@ class PickupRequestCard extends StatelessWidget {
     super.key,
     required this.request,
     required this.showReleaseState,
+    this.footer,
   });
 
   final PickupRequest request;
   final bool showReleaseState;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -32,13 +34,12 @@ class PickupRequestCard extends StatelessWidget {
                     children: [
                       Text(
                         request.studentName,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${request.guardianName} • ${request.homeroom}',
+                        '${request.guardianName} | ${request.homeroom}',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],
@@ -97,10 +98,7 @@ class PickupRequestCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.flag_rounded,
-                    color: colorScheme.error,
-                  ),
+                  Icon(Icons.flag_rounded, color: colorScheme.error),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -140,6 +138,7 @@ class PickupRequestCard extends StatelessWidget {
                 ],
               ),
             ],
+            if (footer != null) ...[const SizedBox(height: 14), footer!],
           ],
         ),
       ),

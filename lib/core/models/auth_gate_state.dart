@@ -1,28 +1,16 @@
 import '../../core/models/app_role.dart';
 import '../../domain/models/user_profile.dart';
 
-enum AuthGateStatus {
-  loading,
-  signedOut,
-  profileUnavailable,
-  authenticated,
-}
+enum AuthGateStatus { loading, signedOut, profileUnavailable, authenticated }
 
 class AuthGateState {
-  const AuthGateState._({
-    required this.status,
-    this.profile,
-    this.message,
-  });
+  const AuthGateState._({required this.status, this.profile, this.message});
 
   const AuthGateState.loading()
     : this._(status: AuthGateStatus.loading, message: 'Resolving session...');
 
   const AuthGateState.signedOut()
-    : this._(
-        status: AuthGateStatus.signedOut,
-        message: 'Sign in to continue.',
-      );
+    : this._(status: AuthGateStatus.signedOut, message: 'Sign in to continue.');
 
   const AuthGateState.profileUnavailable({String? message})
     : this._(

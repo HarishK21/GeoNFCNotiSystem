@@ -92,18 +92,21 @@ final guardiansFutureProvider = FutureProvider<List<Guardian>>((ref) {
       .fetchGuardians(ref.watch(currentSchoolIdProvider));
 });
 
-final queueEntriesStreamProvider = StreamProvider<List<PickupQueueEntry>>((ref) {
+final queueEntriesStreamProvider = StreamProvider<List<PickupQueueEntry>>((
+  ref,
+) {
   return ref
       .watch(queueRepositoryProvider)
       .watchQueue(ref.watch(currentSchoolIdProvider));
 });
 
-final pickupPermissionsStreamProvider =
-    StreamProvider<List<PickupPermission>>((ref) {
-      return ref.watch(pickupPermissionRepositoryProvider).watchPermissions(
-        ref.watch(currentSchoolIdProvider),
-      );
-    });
+final pickupPermissionsStreamProvider = StreamProvider<List<PickupPermission>>((
+  ref,
+) {
+  return ref
+      .watch(pickupPermissionRepositoryProvider)
+      .watchPermissions(ref.watch(currentSchoolIdProvider));
+});
 
 final pickupEventsStreamProvider = StreamProvider<List<PickupEvent>>((ref) {
   return ref
@@ -124,16 +127,18 @@ final schoolAnnouncementsStreamProvider =
           .watchAnnouncements(ref.watch(currentSchoolIdProvider));
     });
 
-final emergencyNoticesStreamProvider =
-    StreamProvider<List<EmergencyNotice>>((ref) {
-      return ref
-          .watch(noticeRepositoryProvider)
-          .watchEmergencyNotices(ref.watch(currentSchoolIdProvider));
-    });
+final emergencyNoticesStreamProvider = StreamProvider<List<EmergencyNotice>>((
+  ref,
+) {
+  return ref
+      .watch(noticeRepositoryProvider)
+      .watchEmergencyNotices(ref.watch(currentSchoolIdProvider));
+});
 
 final currentGuardianProvider = Provider<Guardian?>((ref) {
   final profile = ref.watch(currentUserProfileProvider);
-  final guardians = ref.watch(guardiansFutureProvider).asData?.value ?? const [];
+  final guardians =
+      ref.watch(guardiansFutureProvider).asData?.value ?? const [];
 
   if (profile == null || profile.role != AppRole.parent) {
     return null;
@@ -169,10 +174,9 @@ final familyStudentsProvider = Provider<List<Student>>((ref) {
 
 final familyGuardiansProvider = Provider<List<Guardian>>((ref) {
   final students = ref.watch(familyStudentsProvider);
-  final guardians = ref.watch(guardiansFutureProvider).asData?.value ?? const [];
-  final guardianIds = students
-      .expand((student) => student.guardianIds)
-      .toSet();
+  final guardians =
+      ref.watch(guardiansFutureProvider).asData?.value ?? const [];
+  final guardianIds = students.expand((student) => student.guardianIds).toSet();
 
   return guardians
       .where((guardian) => guardianIds.contains(guardian.id))
@@ -180,7 +184,10 @@ final familyGuardiansProvider = Provider<List<Guardian>>((ref) {
 });
 
 final familyQueueEntriesProvider = Provider<List<PickupQueueEntry>>((ref) {
-  final studentIds = ref.watch(familyStudentsProvider).map((item) => item.id).toSet();
+  final studentIds = ref
+      .watch(familyStudentsProvider)
+      .map((item) => item.id)
+      .toSet();
   final queueEntries =
       ref.watch(queueEntriesStreamProvider).asData?.value ?? const [];
   return queueEntries
@@ -191,7 +198,9 @@ final familyQueueEntriesProvider = Provider<List<PickupQueueEntry>>((ref) {
 final liveQueueEntriesProvider = Provider<List<PickupQueueEntry>>((ref) {
   final queueEntries =
       ref.watch(queueEntriesStreamProvider).asData?.value ?? const [];
-  return queueEntries.where((entry) => !entry.isReleased).toList(growable: false);
+  return queueEntries
+      .where((entry) => !entry.isReleased)
+      .toList(growable: false);
 });
 
 final flaggedQueueEntriesProvider = Provider<List<PickupQueueEntry>>((ref) {
@@ -217,36 +226,40 @@ final familyHistoryProvider = Provider<List<AuditEvent>>((ref) {
   };
 
   final history = <({DateTime time, AuditEvent event})>[
-    ...pickupEvents.where((event) {
-      final name = studentById[event.studentId];
-      return name != null && studentNames.contains(name);
-    }).map(
-      (event) => (
-        time: event.occurredAt,
-        event: AuditEvent(
-          studentName: studentById[event.studentId] ?? event.studentId,
-          action: event.type.name,
-          actorName: event.actorName ?? 'System',
-          timestampLabel: formatTimestamp(event.occurredAt),
-          notes: event.notes ?? 'Pickup event recorded.',
+    ...pickupEvents
+        .where((event) {
+          final name = studentById[event.studentId];
+          return name != null && studentNames.contains(name);
+        })
+        .map(
+          (event) => (
+            time: event.occurredAt,
+            event: AuditEvent(
+              studentName: studentById[event.studentId] ?? event.studentId,
+              action: event.type.name,
+              actorName: event.actorName ?? 'System',
+              timestampLabel: formatTimestamp(event.occurredAt),
+              notes: event.notes ?? 'Pickup event recorded.',
+            ),
+          ),
         ),
-      ),
-    ),
-    ...releaseEvents.where((event) {
-      final name = studentById[event.studentId];
-      return name != null && studentNames.contains(name);
-    }).map(
-      (event) => (
-        time: event.releasedAt,
-        event: AuditEvent(
-          studentName: studentById[event.studentId] ?? event.studentId,
-          action: 'released',
-          actorName: event.staffName,
-          timestampLabel: formatTimestamp(event.releasedAt),
-          notes: event.notes ?? 'Student released.',
+    ...releaseEvents
+        .where((event) {
+          final name = studentById[event.studentId];
+          return name != null && studentNames.contains(name);
+        })
+        .map(
+          (event) => (
+            time: event.releasedAt,
+            event: AuditEvent(
+              studentName: studentById[event.studentId] ?? event.studentId,
+              action: 'released',
+              actorName: event.staffName,
+              timestampLabel: formatTimestamp(event.releasedAt),
+              notes: event.notes ?? 'Student released.',
+            ),
+          ),
         ),
-      ),
-    ),
   ];
 
   history.sort((left, right) => right.time.compareTo(left.time));
