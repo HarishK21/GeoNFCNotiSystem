@@ -17,7 +17,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Today\'s Pickup Plan'), findsOneWidget);
-    expect(find.text('Today\'s pickup rules'), findsOneWidget);
+    expect(find.text('Android geofencing'), findsOneWidget);
   });
 
   testWidgets('staff demo routes to guarded staff flow', (tester) async {

@@ -58,15 +58,56 @@ class WorkflowActionController extends AsyncNotifier<void> {
   FutureOr<void> build() {}
 
   Future<void> markApproaching(PickupQueueEntry entry) async {
-    await _transition(entry, PickupEventType.approaching);
+    await _transition(
+      entry,
+      PickupEventType.approaching,
+      source: PickupEventSource.manual,
+    );
   }
 
-  Future<void> verifyPickup(PickupQueueEntry entry) async {
-    await _transition(entry, PickupEventType.verified);
+  Future<void> verifyPickup(
+    PickupQueueEntry entry, {
+    PickupEventSource source = PickupEventSource.nfc,
+    String? actorName,
+    String? notes,
+  }) async {
+    await _transition(
+      entry,
+      PickupEventType.verified,
+      source: source,
+      actorName: actorName,
+      notes: notes,
+    );
   }
 
-  Future<void> releaseStudent(PickupQueueEntry entry) async {
-    await _transition(entry, PickupEventType.released);
+  Future<void> releaseStudent(
+    PickupQueueEntry entry, {
+    PickupEventSource source = PickupEventSource.manual,
+    String? actorName,
+    String? notes,
+  }) async {
+    await _transition(
+      entry,
+      PickupEventType.released,
+      source: source,
+      actorName: actorName,
+      notes: notes,
+    );
+  }
+
+  Future<void> markApproachingFromDevice(
+    PickupQueueEntry entry, {
+    required PickupEventSource source,
+    required String actorName,
+    required String notes,
+  }) async {
+    await _transition(
+      entry,
+      PickupEventType.approaching,
+      source: source,
+      actorName: actorName,
+      notes: notes,
+    );
   }
 
   Future<void> flagException(PickupQueueEntry entry, String flag) async {
@@ -85,6 +126,53 @@ class WorkflowActionController extends AsyncNotifier<void> {
       auditAction: 'Exception cleared',
       auditNotes: 'Exception cleared for ${entry.studentName}.',
     );
+  }
+
+  Future<void> resetQueueState(
+    PickupQueueEntry entry, {
+    String actorName = 'Debug controls',
+    String notes = 'Queue state reset to pending.',
+  }) async {
+    final updatedEntry = entry.copyWith(
+      eventType: PickupEventType.pending,
+      isNfcVerified: false,
+      etaLabel: 'Pending',
+      clearExceptionFlag: true,
+    );
+
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await ref.read(queueRepositoryProvider).saveQueueEntry(updatedEntry);
+      await ref
+          .read(pickupEventRepositoryProvider)
+          .logPickupEvent(
+            PickupEvent(
+              id: _generateId('pickup'),
+              schoolId: updatedEntry.schoolId,
+              studentId: updatedEntry.studentId,
+              guardianId: updatedEntry.guardianId,
+              type: PickupEventType.pending,
+              source: PickupEventSource.manual,
+              pickupZone: updatedEntry.pickupZone,
+              occurredAt: DateTime.now(),
+              actorName: actorName,
+              notes: notes,
+            ),
+          );
+      await ref
+          .read(auditRepositoryProvider)
+          .appendAuditEntry(
+            AuditTrailEntry(
+              id: _generateId('audit'),
+              schoolId: updatedEntry.schoolId,
+              studentName: updatedEntry.studentName,
+              action: 'Reset to pending',
+              actorName: actorName,
+              occurredAt: DateTime.now(),
+              notes: notes,
+            ),
+          );
+    });
   }
 
   Future<void> createTemporaryPermission({
@@ -143,8 +231,11 @@ class WorkflowActionController extends AsyncNotifier<void> {
 
   Future<void> _transition(
     PickupQueueEntry entry,
-    PickupEventType nextStatus,
-  ) async {
+    PickupEventType nextStatus, {
+    required PickupEventSource source,
+    String? actorName,
+    String? notes,
+  }) async {
     final machine = ref.read(queueStateMachineProvider);
     final validationError = machine.validateTransition(
       entry.eventType,
@@ -175,13 +266,11 @@ class WorkflowActionController extends AsyncNotifier<void> {
               studentId: updatedEntry.studentId,
               guardianId: updatedEntry.guardianId,
               type: nextStatus,
-              source: nextStatus == PickupEventType.verified
-                  ? PickupEventSource.nfc
-                  : PickupEventSource.manual,
+              source: source,
               pickupZone: updatedEntry.pickupZone,
               occurredAt: DateTime.now(),
-              actorName: _actorName,
-              notes: 'Queue status changed to ${nextStatus.name}.',
+              actorName: actorName ?? _actorName,
+              notes: notes ?? 'Queue status changed to ${nextStatus.name}.',
             ),
           );
 
@@ -195,10 +284,10 @@ class WorkflowActionController extends AsyncNotifier<void> {
                 studentId: updatedEntry.studentId,
                 guardianId: updatedEntry.guardianId,
                 staffId: ref.read(currentUserProfileProvider)?.uid ?? 'staff',
-                staffName: _actorName,
+                staffName: actorName ?? _actorName,
                 releasedAt: DateTime.now(),
                 verificationMethod: 'app-confirmed',
-                notes: 'Release confirmed from staff workflow.',
+                notes: notes ?? 'Release confirmed from staff workflow.',
               ),
             );
       }
@@ -211,9 +300,9 @@ class WorkflowActionController extends AsyncNotifier<void> {
               schoolId: updatedEntry.schoolId,
               studentName: updatedEntry.studentName,
               action: nextStatus.name,
-              actorName: _actorName,
+              actorName: actorName ?? _actorName,
               occurredAt: DateTime.now(),
-              notes: 'Queue status changed to ${nextStatus.name}.',
+              notes: notes ?? 'Queue status changed to ${nextStatus.name}.',
             ),
           );
     });

@@ -59,26 +59,31 @@ Validation commands:
 - Add Android platform channels or plugins for geofence and NFC events.
 - Map geofence to approaching status and NFC to verified status.
 - Surface Android-only capability checks while keeping iOS compile-safe.
+- Preserve mock and debug simulation flows so device-driven state changes remain testable without hardware.
+- Document the manual Android phone-testing path for both integrations.
 
 Acceptance criteria:
 - Android approaching events move a guardian into the live queue.
 - Android NFC verification unlocks staff release actions.
+- Debug controls can simulate approaching, verified, and reset transitions without hardware.
+- Device-triggered queue changes write pickup-event and audit-trail records through the repository layer.
 - iOS builds remain compile-safe with graceful "not supported yet" messaging.
 
 Validation commands:
+- `puro -e geotap flutter pub get`
+- `puro -e geotap dart format lib test`
 - `puro -e geotap flutter analyze`
 - `puro -e geotap flutter test`
-- `puro -e geotap flutter build apk --debug`
 
 ### 5. Release hardening and readiness
 - Add release confirmations, queue reconciliation, and audit filters.
 - Expand tests for role routing, reducers/providers, and release rules.
-- Prepare store-ready app metadata and deployment notes.
+- Prepare store-ready app metadata, backend validation, and deployment notes.
 
 Acceptance criteria:
 - Staff cannot release an unverified request.
 - Audit trail captures queue, delegation, verification, release, and exception changes.
-- The Android debug build succeeds on a machine with full Android SDK setup.
+- Backend and device-hardening tasks are documented for a machine with full Android SDK and Firebase setup.
 
 Validation commands:
 - `puro -e geotap flutter analyze`
@@ -87,4 +92,4 @@ Validation commands:
 
 ## Current next milestone
 
-Next up is Milestone 4: implement Android geofencing and NFC so approaching and verified states can be driven by live device events.
+Next up is Milestone 5: harden release rules, backend validation, and production readiness on top of the Android device-event flows.

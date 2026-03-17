@@ -6,6 +6,8 @@ import '../../../../core/providers/app_providers.dart';
 import '../../../../core/widgets/content_state_card.dart';
 import '../../../../core/widgets/dashboard_card.dart';
 import '../../../../core/widgets/pickup_request_card.dart';
+import '../../../../domain/models/geofence_target.dart';
+import '../../../../domain/models/geofencing_status.dart';
 import '../../../../domain/models/pickup_queue_entry.dart';
 import '../../../../domain/models/student.dart';
 
@@ -16,7 +18,9 @@ class ParentHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final environment = ref.watch(appEnvironmentProvider);
     final workflowAction = ref.watch(workflowActionControllerProvider);
+    final deviceAction = ref.watch(deviceActionControllerProvider);
     final authGate = ref.watch(authGateStateProvider);
+    final geofencingStatus = ref.watch(geofencingStatusProvider);
     final studentsState = ref.watch(studentsFutureProvider);
     final guardiansState = ref.watch(guardiansFutureProvider);
     final queueState = ref.watch(queueEntriesStreamProvider);
@@ -25,10 +29,15 @@ class ParentHomeScreen extends ConsumerWidget {
     final familyQueueEntries = ref.watch(familyQueueEntriesProvider);
     final familyQueue = ref.watch(familyPickupQueueProvider);
     final activeDelegates = ref.watch(familyDelegatesProvider);
+    final geofenceTargets = ref.watch(activeGeofenceTargetsProvider);
+    final debugEnabled = ref.watch(deviceDebugEnabledProvider);
     final announcements = ref.watch(announcementsProvider);
     final latestAnnouncement = announcements.isNotEmpty
         ? announcements.first
         : null;
+    final geofenceTargetByStudentId = {
+      for (final target in geofenceTargets) target.studentId: target,
+    };
     final loadError = _firstError([
       studentsState,
       guardiansState,
@@ -44,7 +53,7 @@ class ParentHomeScreen extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        if (workflowAction.isLoading) ...[
+        if (workflowAction.isLoading || deviceAction.isLoading) ...[
           const LinearProgressIndicator(),
           const SizedBox(height: 16),
         ],
@@ -62,7 +71,7 @@ class ParentHomeScreen extends ConsumerWidget {
                 'The app shell uses local mock data until Auth and Firestore are configured.',
             icon: Icons.cloud_off_rounded,
             child: const Text(
-              'This milestone keeps the real workflow structure in place while mock repositories power the data and actions.',
+              'This milestone keeps the device workflow structure in place while mock repositories and debug simulation power the data and actions.',
             ),
           ),
           const SizedBox(height: 16),
@@ -78,6 +87,11 @@ class ParentHomeScreen extends ConsumerWidget {
                 : '${activeDelegates.length} delegate'
                       '${activeDelegates.length == 1 ? ' is' : 's are'} active for today\'s pickup window.',
           ),
+        ),
+        const SizedBox(height: 16),
+        _GeofencingCard(
+          status: geofencingStatus,
+          targetCount: geofenceTargets.length,
         ),
         const SizedBox(height: 16),
         const DashboardCard(
@@ -97,7 +111,7 @@ class ParentHomeScreen extends ConsumerWidget {
               _FlowStep(
                 index: '2',
                 text:
-                    'Approaching marks that a guardian is on the way. In mock mode you can trigger this manually while geofencing is still deferred.',
+                    'Approaching is driven by Android geofence entry. In debug mode you can simulate it without moving the device.',
               ),
               SizedBox(height: 10),
               _FlowStep(
@@ -134,6 +148,8 @@ class ParentHomeScreen extends ConsumerWidget {
               request: familyQueue
                   .where((request) => request.studentId == student.id)
                   .firstOrNull,
+              geofenceTarget: geofenceTargetByStudentId[student.id],
+              debugEnabled: debugEnabled,
             ),
             const SizedBox(height: 16),
           ],
@@ -154,16 +170,109 @@ class ParentHomeScreen extends ConsumerWidget {
   }
 }
 
+class _GeofencingCard extends ConsumerWidget {
+  const _GeofencingCard({required this.status, required this.targetCount});
+
+  final AsyncValue<GeofencingStatus> status;
+  final int targetCount;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final canRequestPermission =
+        status.asData?.value.supported == true &&
+        status.asData?.value.permissionGranted == false;
+
+    return DashboardCard(
+      title: 'Android geofencing',
+      subtitle: 'Approaching is driven by Android location events.',
+      icon: Icons.near_me_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            status.when(
+              data: (value) {
+                if (!value.supported) {
+                  return value.detail;
+                }
+                if (value.canMonitor) {
+                  return 'Monitoring $targetCount family target'
+                      '${targetCount == 1 ? '' : 's'} around the school geofence.';
+                }
+                return value.detail;
+              },
+              error: (error, stackTrace) =>
+                  'Could not read Android geofencing status: $error',
+              loading: () =>
+                  'Checking Android location permission and monitoring state.',
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Chip(
+                label: Text(
+                  status.asData?.value.supported == true
+                      ? 'Android supported'
+                      : 'Stubbed elsewhere',
+                ),
+              ),
+              Chip(
+                label: Text(
+                  '$targetCount active target${targetCount == 1 ? '' : 's'}',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              if (canRequestPermission)
+                FilledButton.icon(
+                  onPressed: () => _runDeviceAction(
+                    context,
+                    ref,
+                    successMessage: 'Requested Android location access.',
+                    action: () => ref
+                        .read(deviceActionControllerProvider.notifier)
+                        .requestGeofencePermission(),
+                  ),
+                  icon: const Icon(Icons.location_on_outlined),
+                  label: const Text('Grant location access'),
+                ),
+              OutlinedButton.icon(
+                onPressed: () => ref
+                    .read(deviceActionControllerProvider.notifier)
+                    .refreshGeofencingStatus(),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Refresh geofencing'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StudentPlanCard extends ConsumerWidget {
   const _StudentPlanCard({
     required this.student,
     required this.queueEntry,
     required this.request,
+    required this.geofenceTarget,
+    required this.debugEnabled,
   });
 
   final Student student;
   final PickupQueueEntry? queueEntry;
   final PickupRequest? request;
+  final GeofenceTarget? geofenceTarget;
+  final bool debugEnabled;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -179,52 +288,84 @@ class _StudentPlanCard extends ConsumerWidget {
           : PickupRequestCard(
               request: request!,
               showReleaseState: true,
-              footer: queueEntry != null && queueEntry!.canMarkApproaching
-                  ? Align(
-                      alignment: Alignment.centerLeft,
-                      child: FilledButton.icon(
-                        onPressed: () => _markApproaching(
-                          context,
-                          ref,
-                          queueEntry!,
-                          student.displayName,
-                        ),
-                        icon: const Icon(Icons.near_me_rounded),
-                        label: const Text('I\'m approaching'),
-                      ),
-                    )
-                  : Text(
-                      request!.presenceState.detail,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
+              footer: _StudentPlanActions(
+                request: request!,
+                queueEntry: queueEntry,
+                geofenceTarget: geofenceTarget,
+                debugEnabled: debugEnabled,
+              ),
             ),
     );
   }
+}
 
-  Future<void> _markApproaching(
-    BuildContext context,
-    WidgetRef ref,
-    PickupQueueEntry entry,
-    String studentName,
-  ) async {
-    try {
-      await ref
-          .read(workflowActionControllerProvider.notifier)
-          .markApproaching(entry);
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$studentName is now marked as approaching.')),
-      );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update pickup: $error')),
+class _StudentPlanActions extends ConsumerWidget {
+  const _StudentPlanActions({
+    required this.request,
+    required this.queueEntry,
+    required this.geofenceTarget,
+    required this.debugEnabled,
+  });
+
+  final PickupRequest request;
+  final PickupQueueEntry? queueEntry;
+  final GeofenceTarget? geofenceTarget;
+  final bool debugEnabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final buttons = <Widget>[];
+
+    if (debugEnabled &&
+        geofenceTarget != null &&
+        queueEntry != null &&
+        queueEntry!.canMarkApproaching) {
+      buttons.add(
+        FilledButton.icon(
+          onPressed: () => _runDeviceAction(
+            context,
+            ref,
+            successMessage: '${request.studentName} marked as approaching.',
+            action: () => ref
+                .read(deviceActionControllerProvider.notifier)
+                .simulateApproaching(geofenceTarget!),
+          ),
+          icon: const Icon(Icons.near_me_rounded),
+          label: const Text('Simulate approaching'),
+        ),
       );
     }
+
+    if (debugEnabled && queueEntry != null && !queueEntry!.canMarkApproaching) {
+      buttons.add(
+        OutlinedButton.icon(
+          onPressed: () => _runDeviceAction(
+            context,
+            ref,
+            successMessage: '${request.studentName} reset to pending.',
+            action: () => ref
+                .read(deviceActionControllerProvider.notifier)
+                .resetQueueState(request.studentId),
+          ),
+          icon: const Icon(Icons.restart_alt_rounded),
+          label: const Text('Reset queue state'),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          request.presenceState.detail,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        if (buttons.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(spacing: 12, runSpacing: 12, children: buttons),
+        ],
+      ],
+    );
   }
 }
 
@@ -245,6 +386,29 @@ class _FlowStep extends StatelessWidget {
       ],
     );
   }
+}
+
+Future<void> _runDeviceAction(
+  BuildContext context,
+  WidgetRef ref, {
+  required String successMessage,
+  required Future<void> Function() action,
+}) async {
+  await action();
+  if (!context.mounted) {
+    return;
+  }
+
+  final state = ref.read(deviceActionControllerProvider);
+  final messenger = ScaffoldMessenger.of(context);
+  if (state.hasError) {
+    messenger.showSnackBar(
+      SnackBar(content: Text('Device action failed: ${state.error}')),
+    );
+    return;
+  }
+
+  messenger.showSnackBar(SnackBar(content: Text(successMessage)));
 }
 
 extension _FirstOrNullExtension<T> on Iterable<T> {

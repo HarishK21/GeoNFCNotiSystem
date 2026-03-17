@@ -16,6 +16,8 @@ class StaffQueueScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final queueState = ref.watch(queueEntriesStreamProvider);
     final workflowAction = ref.watch(workflowActionControllerProvider);
+    final deviceAction = ref.watch(deviceActionControllerProvider);
+    final debugEnabled = ref.watch(deviceDebugEnabledProvider);
     final liveQueue = ref.watch(liveQueueEntriesProvider);
     final releaseReady = liveQueue.where((entry) => entry.canRelease).length;
     final pendingVerification = liveQueue
@@ -26,17 +28,17 @@ class StaffQueueScreen extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        if (workflowAction.isLoading) ...[
+        if (workflowAction.isLoading || deviceAction.isLoading) ...[
           const LinearProgressIndicator(),
           const SizedBox(height: 16),
         ],
         DashboardCard(
           title: 'Live release queue',
           subtitle:
-              '$releaseReady ready for release | $pendingVerification waiting on verification',
+              '$releaseReady ready for release | $pendingVerification waiting on NFC verification',
           icon: Icons.local_shipping_outlined,
           child: const Text(
-            'Staff should only release a student when the queue shows verified on-site. Approaching status alone is not enough.',
+            'Approaching is driven by geofencing and verified is driven by NFC. Release remains locked until the queue shows verified on-site.',
           ),
         ),
         const SizedBox(height: 16),
@@ -56,14 +58,14 @@ class StaffQueueScreen extends ConsumerWidget {
           const ContentStateCard.empty(
             title: 'No active pickups in queue',
             message:
-                'When guardians start the pickup flow, live queue entries will appear here.',
+                'When guardians trigger the pickup flow, live queue entries will appear here.',
           ),
         ] else ...[
           for (final entry in liveQueue) ...[
             PickupRequestCard(
               request: _toRequest(entry),
               showReleaseState: true,
-              footer: _QueueActions(entry: entry),
+              footer: _QueueActions(entry: entry, debugEnabled: debugEnabled),
             ),
             const SizedBox(height: 16),
           ],
@@ -74,47 +76,14 @@ class StaffQueueScreen extends ConsumerWidget {
 }
 
 class _QueueActions extends ConsumerWidget {
-  const _QueueActions({required this.entry});
+  const _QueueActions({required this.entry, required this.debugEnabled});
 
   final PickupQueueEntry entry;
+  final bool debugEnabled;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final buttons = <Widget>[];
-
-    if (entry.canMarkApproaching) {
-      buttons.add(
-        OutlinedButton.icon(
-          onPressed: () => runWorkflowAction(
-            context,
-            ref,
-            successMessage: '${entry.studentName} marked as approaching.',
-            action: () => ref
-                .read(workflowActionControllerProvider.notifier)
-                .markApproaching(entry),
-          ),
-          icon: const Icon(Icons.near_me_rounded),
-          label: const Text('Mark approaching'),
-        ),
-      );
-    }
-
-    if (entry.canVerify) {
-      buttons.add(
-        FilledButton.icon(
-          onPressed: () => runWorkflowAction(
-            context,
-            ref,
-            successMessage: '${entry.studentName} verified on-site.',
-            action: () => ref
-                .read(workflowActionControllerProvider.notifier)
-                .verifyPickup(entry),
-          ),
-          icon: const Icon(Icons.verified_user_rounded),
-          label: const Text('Verify on-site'),
-        ),
-      );
-    }
 
     if (entry.canRelease) {
       buttons.add(
@@ -159,11 +128,30 @@ class _QueueActions extends ConsumerWidget {
       );
     }
 
+    if (debugEnabled && !entry.canMarkApproaching) {
+      buttons.add(
+        OutlinedButton.icon(
+          onPressed: () => _runDeviceAction(
+            context,
+            ref,
+            successMessage: '${entry.studentName} reset to pending.',
+            action: () => ref
+                .read(deviceActionControllerProvider.notifier)
+                .resetQueueState(entry.studentId),
+          ),
+          icon: const Icon(Icons.restart_alt_rounded),
+          label: const Text('Reset queue'),
+        ),
+      );
+    }
+
     if (buttons.isEmpty) {
       return Text(
-        entry.hasException
-            ? 'Resolve the current exception flag from the Flags tab if follow-up is needed.'
-            : 'No additional staff actions are available for this queue item.',
+        entry.canVerify
+            ? 'Use the Student Lookup tab to arm Android NFC verification or simulate it in debug mode.'
+            : (entry.hasException
+                  ? 'Resolve the current exception flag from the Flags tab if follow-up is needed.'
+                  : 'No additional staff actions are available for this queue item.'),
       );
     }
 
@@ -185,4 +173,27 @@ PickupRequest _toRequest(PickupQueueEntry entry) {
     isNfcVerified: entry.isNfcVerified,
     exceptionFlag: entry.exceptionFlag,
   );
+}
+
+Future<void> _runDeviceAction(
+  BuildContext context,
+  WidgetRef ref, {
+  required String successMessage,
+  required Future<void> Function() action,
+}) async {
+  await action();
+  if (!context.mounted) {
+    return;
+  }
+
+  final state = ref.read(deviceActionControllerProvider);
+  final messenger = ScaffoldMessenger.of(context);
+  if (state.hasError) {
+    messenger.showSnackBar(
+      SnackBar(content: Text('Device action failed: ${state.error}')),
+    );
+    return;
+  }
+
+  messenger.showSnackBar(SnackBar(content: Text(successMessage)));
 }

@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:geo_tap_guardian/core/models/app_role.dart';
 import 'package:geo_tap_guardian/domain/models/emergency_notice.dart';
+import 'package:geo_tap_guardian/domain/models/geofence_trigger_event.dart';
+import 'package:geo_tap_guardian/domain/models/nfc_verification_event.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_queue_entry.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_permission.dart';
 import 'package:geo_tap_guardian/domain/models/user_profile.dart';
@@ -82,4 +84,54 @@ void main() {
       expect(entry.exceptionFlag, 'ID check completed');
     },
   );
+
+  test(
+    'geofence trigger event parsing resolves simulated approach payload',
+    () {
+      final event = GeofenceTriggerEvent.fromMap({
+        'targetId': 'geofence_guardian_andrea_student_maya',
+        'schoolId': 'school_1',
+        'studentId': 'student_1',
+        'guardianId': 'guardian_1',
+        'studentName': 'Maya Brooks',
+        'pickupZone': 'North Loop',
+        'occurredAtEpochMs': DateTime.utc(
+          2026,
+          3,
+          17,
+          15,
+          12,
+        ).millisecondsSinceEpoch,
+        'isSimulated': true,
+      });
+
+      expect(event.targetId, 'geofence_guardian_andrea_student_maya');
+      expect(event.studentName, 'Maya Brooks');
+      expect(event.isSimulated, isTrue);
+      expect(event.occurredAt.toUtc().hour, 15);
+    },
+  );
+
+  test('nfc verification event parsing resolves tag and timing', () {
+    final event = NfcVerificationEvent.fromMap({
+      'schoolId': 'school_1',
+      'studentId': 'student_1',
+      'guardianId': 'guardian_1',
+      'studentName': 'Maya Brooks',
+      'tagId': '04AABB11',
+      'occurredAtEpochMs': DateTime.utc(
+        2026,
+        3,
+        17,
+        15,
+        14,
+      ).millisecondsSinceEpoch,
+      'isSimulated': false,
+    });
+
+    expect(event.studentId, 'student_1');
+    expect(event.tagId, '04AABB11');
+    expect(event.isSimulated, isFalse);
+    expect(event.occurredAt.toUtc().minute, 14);
+  });
 }
