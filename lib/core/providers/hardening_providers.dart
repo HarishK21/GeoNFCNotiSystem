@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/app_role.dart';
 import '../../domain/models/audit_trail_entry.dart';
+import '../../domain/models/office_approval_record.dart';
 import '../../domain/models/pickup_event.dart';
 import '../../domain/models/pickup_permission.dart';
 import '../../domain/models/pickup_queue_entry.dart';
 import '../../domain/models/release_event.dart';
 import '../../domain/models/student.dart';
 import '../../domain/services/notification_dispatcher.dart';
+import '../../domain/services/office_approval_workflow_service.dart';
 import '../../domain/services/pickup_authorization_service.dart';
 import '../../domain/services/queue_reconciliation_service.dart';
 import 'flow_providers.dart';
@@ -32,6 +34,11 @@ final queueReconciliationServiceProvider = Provider<QueueReconciliationService>(
 final notificationDispatcherProvider = Provider<NotificationDispatcher>((ref) {
   return NotificationDispatcher(ref.watch(pushNotificationRepositoryProvider));
 });
+
+final officeApprovalWorkflowServiceProvider =
+    Provider<OfficeApprovalWorkflowService>((ref) {
+      return const OfficeApprovalWorkflowService();
+    });
 
 final workflowHardeningBootstrapProvider = Provider<void>((ref) {
   final environment = ref.watch(appEnvironmentProvider);
@@ -70,6 +77,9 @@ final workflowHardeningBootstrapProvider = Provider<void>((ref) {
   ref.listen(pickupPermissionsStreamProvider, (previous, next) {
     unawaited(scheduleReconciliation());
   });
+  ref.listen(officeApprovalsStreamProvider, (previous, next) {
+    unawaited(scheduleReconciliation());
+  });
   ref.listen(pickupEventsStreamProvider, (previous, next) {
     unawaited(scheduleReconciliation());
   });
@@ -92,6 +102,12 @@ Future<void> _runQueueReconciliation(Ref ref) async {
   final List<Student> students =
       ref.read(studentsFutureProvider).asData?.value ??
       await ref.read(studentRepositoryProvider).fetchStudents(schoolId);
+  final List<OfficeApprovalRecord> approvals =
+      ref.read(officeApprovalsStreamProvider).asData?.value ??
+      await ref
+          .read(officeApprovalRepositoryProvider)
+          .watchApprovals(schoolId)
+          .first;
   final List<PickupPermission> permissions =
       ref.read(pickupPermissionsStreamProvider).asData?.value ??
       await ref
@@ -116,6 +132,7 @@ Future<void> _runQueueReconciliation(Ref ref) async {
       .reconcileSchoolQueue(
         queueEntries: queueEntries,
         students: students,
+        approvals: approvals,
         permissions: permissions,
         pickupEvents: pickupEvents,
         releaseEvents: releaseEvents,

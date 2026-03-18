@@ -42,8 +42,25 @@ service cloud.firestore {
       return /databases/$(database)/documents/schools/$(schoolId)/queue/$(queueEntryId);
     }
 
+    function officeApprovalPath(schoolId, queueEntryId) {
+      return /databases/$(database)/documents/schools/$(schoolId)/officeApprovals/$(queueEntryId);
+    }
+
     function guardianData(schoolId, guardianId) {
       return get(guardianPath(schoolId, guardianId)).data;
+    }
+
+    function queueData(schoolId, queueEntryId) {
+      return get(queuePath(schoolId, queueEntryId)).data;
+    }
+
+    function officeApprovalData(schoolId, queueEntryId) {
+      return get(officeApprovalPath(schoolId, queueEntryId)).data;
+    }
+
+    function hasApprovedOfficeApproval(schoolId, queueEntryId) {
+      return exists(officeApprovalPath(schoolId, queueEntryId))
+        && officeApprovalData(schoolId, queueEntryId).status == 'approved';
     }
 
     function isLinkedGuardian(schoolId, guardianId) {
@@ -76,6 +93,40 @@ service cloud.firestore {
         && request.resource.data.officeApprovalRequired is bool;
     }
 
+    function officeApprovalFieldsMatchSchool(schoolId, approvalId) {
+      return request.resource.data.schoolId == schoolId
+        && request.resource.data.queueEntryId == approvalId
+        && request.resource.data.studentId is string
+        && request.resource.data.guardianId is string
+        && request.resource.data.studentName is string
+        && request.resource.data.guardianName is string
+        && request.resource.data.status in ['pending', 'approved', 'denied', 'resolved']
+        && request.resource.data.reasonCode is string
+        && request.resource.data.reasonMessage is string
+        && request.resource.data.requestedAt is timestamp
+        && request.resource.data.requestedByUid is string
+        && request.resource.data.requestedByName is string;
+    }
+
+    function notificationJobFieldsMatchSchool(schoolId) {
+      return request.resource.data.schoolId == schoolId
+        && request.resource.data.type in [
+          'guardianApproaching',
+          'guardianVerified',
+          'releaseCompleted',
+          'emergencyNotice',
+        ]
+        && request.resource.data.audienceTopic is string
+        && request.resource.data.title is string
+        && request.resource.data.body is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.status == 'queued'
+        && request.resource.data.payload is map
+        && request.resource.data.attemptCount == 0
+        && request.resource.data.lastAttemptAt == null
+        && request.resource.data.deliveredAt == null;
+    }
+
     function parentCanAdvanceToApproaching(schoolId, queueEntryId) {
       return familyAccess(schoolId, request.resource.data.studentId, request.resource.data.guardianId)
         && (
@@ -103,18 +154,34 @@ service cloud.firestore {
             && resource.data.studentId == request.resource.data.studentId
             && resource.data.guardianId == request.resource.data.guardianId
             && (
-              (resource.data.eventType == request.resource.data.eventType)
-              ||
-              (resource.data.eventType == 'pending' && request.resource.data.eventType == 'approaching')
-              || (resource.data.eventType == 'approaching' && request.resource.data.eventType == 'verified' && request.resource.data.isNfcVerified == true)
+              resource.data.eventType == request.resource.data.eventType
+              || (resource.data.eventType == 'pending' && request.resource.data.eventType == 'approaching')
+              || (resource.data.eventType == 'approaching'
+                && request.resource.data.eventType == 'verified'
+                && request.resource.data.isNfcVerified == true)
               || (
                 resource.data.eventType == 'verified'
                 && request.resource.data.eventType == 'released'
                 && request.resource.data.isNfcVerified == true
-                && request.resource.data.officeApprovalRequired == false
+                && (
+                  resource.data.officeApprovalRequired == false
+                  || hasApprovedOfficeApproval(schoolId, queueEntryId)
+                )
               )
             )
           )
+        );
+    }
+
+    function releaseQueueEligible(schoolId, queueEntryId) {
+      return exists(queuePath(schoolId, queueEntryId))
+        && queueData(schoolId, queueEntryId).studentId == request.resource.data.studentId
+        && queueData(schoolId, queueEntryId).guardianId == request.resource.data.guardianId
+        && queueData(schoolId, queueEntryId).isNfcVerified == true
+        && queueData(schoolId, queueEntryId).eventType in ['verified', 'released']
+        && (
+          queueData(schoolId, queueEntryId).officeApprovalRequired == false
+          || hasApprovedOfficeApproval(schoolId, queueEntryId)
         );
     }
 
@@ -124,21 +191,21 @@ service cloud.firestore {
     }
 
     match /schools/{schoolId} {
-      allow read: if sameSchool(schoolId) || isStaff();
+      allow read: if sameSchool(schoolId);
       allow create, update, delete: if false;
 
       match /students/{studentId} {
-        allow read: if sameSchool(schoolId) || isStaff();
+        allow read: if sameSchool(schoolId);
         allow create, update, delete: if isStaff() && sameSchool(schoolId);
       }
 
       match /guardians/{guardianId} {
-        allow read: if sameSchool(schoolId) || isStaff();
+        allow read: if sameSchool(schoolId);
         allow create, update, delete: if isStaff() && sameSchool(schoolId);
       }
 
       match /pickupPermissions/{permissionId} {
-        allow read: if isStaff()
+        allow read: if isStaff() && sameSchool(schoolId)
           || familyAccess(schoolId, resource.data.studentId, resource.data.guardianId);
         allow create: if (
             isStaff() && sameSchool(schoolId)
@@ -153,7 +220,7 @@ service cloud.firestore {
       }
 
       match /pickupEvents/{pickupEventId} {
-        allow read: if isStaff()
+        allow read: if isStaff() && sameSchool(schoolId)
           || familyAccess(schoolId, resource.data.studentId, resource.data.guardianId);
         allow create: if (
           familyAccess(schoolId, request.resource.data.studentId, request.resource.data.guardianId)
@@ -167,29 +234,40 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      match /officeApprovals/{approvalId} {
+        allow read: if isStaff() && sameSchool(schoolId)
+          || familyAccess(schoolId, resource.data.studentId, resource.data.guardianId);
+        allow create, update: if isStaff()
+          && sameSchool(schoolId)
+          && officeApprovalFieldsMatchSchool(schoolId, approvalId);
+        allow delete: if false;
+      }
+
       match /releaseEvents/{releaseEventId} {
-        allow read: if isStaff()
+        allow read: if isStaff() && sameSchool(schoolId)
           || familyAccess(schoolId, resource.data.studentId, resource.data.guardianId);
         allow create: if isStaff()
           && sameSchool(schoolId)
           && request.resource.data.schoolId == schoolId
+          && request.resource.data.queueEntryId is string
           && request.resource.data.staffId == request.auth.uid
-          && request.resource.data.verificationMethod == 'nfc-verified-release';
+          && request.resource.data.verificationMethod == 'nfc-verified-release'
+          && releaseQueueEligible(schoolId, request.resource.data.queueEntryId);
         allow update, delete: if false;
       }
 
       match /announcements/{announcementId} {
-        allow read: if sameSchool(schoolId) || isStaff();
+        allow read: if sameSchool(schoolId);
         allow create, update, delete: if isStaff() && sameSchool(schoolId);
       }
 
       match /emergencyNotices/{noticeId} {
-        allow read: if sameSchool(schoolId) || isStaff();
+        allow read: if sameSchool(schoolId);
         allow create, update, delete: if isStaff() && sameSchool(schoolId);
       }
 
       match /queue/{queueEntryId} {
-        allow read: if isStaff()
+        allow read: if isStaff() && sameSchool(schoolId)
           || familyAccess(schoolId, resource.data.studentId, resource.data.guardianId);
         allow create: if parentCanAdvanceToApproaching(schoolId, queueEntryId)
           || staffCanSetQueueState(schoolId, queueEntryId);
@@ -206,7 +284,9 @@ service cloud.firestore {
 
       match /notificationJobs/{jobId} {
         allow read: if isStaff() && sameSchool(schoolId);
-        allow create: if sameSchool(schoolId) && (isStaff() || isParent());
+        allow create: if sameSchool(schoolId)
+          && (isStaff() || isParent())
+          && notificationJobFieldsMatchSchool(schoolId);
         allow update, delete: if false;
       }
     }

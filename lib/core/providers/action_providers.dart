@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/app_role.dart';
 import '../../domain/models/audit_trail_entry.dart';
+import '../../domain/models/office_approval_record.dart';
 import '../../domain/models/pickup_event.dart';
 import '../../domain/models/pickup_exception_code.dart';
 import '../../domain/models/pickup_permission.dart';
@@ -144,11 +145,27 @@ class WorkflowActionController extends AsyncNotifier<void> {
 
   Future<void> clearException(PickupQueueEntry entry) async {
     final updatedEntry = entry.copyWith(clearExceptionFlag: true);
-    await _saveQueueAndAudit(
-      updatedEntry: updatedEntry,
-      auditAction: 'Exception cleared',
-      auditNotes: 'Exception cleared for ${entry.studentName}.',
-    );
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await ref.read(queueRepositoryProvider).saveQueueEntry(updatedEntry);
+      await _resolveOfficeApprovalIfPresent(
+        entry,
+        notes: 'Exception cleared manually before release.',
+      );
+      await ref
+          .read(auditRepositoryProvider)
+          .appendAuditEntry(
+            AuditTrailEntry(
+              id: _generateId('audit'),
+              schoolId: updatedEntry.schoolId,
+              studentName: updatedEntry.studentName,
+              action: 'Exception cleared',
+              actorName: _actorName,
+              occurredAt: DateTime.now(),
+              notes: 'Exception cleared for ${entry.studentName}.',
+            ),
+          );
+    });
   }
 
   Future<void> resetQueueState(
@@ -179,6 +196,10 @@ class WorkflowActionController extends AsyncNotifier<void> {
     state = await AsyncValue.guard(() async {
       await ref.read(queueRepositoryProvider).saveQueueEntry(updatedEntry);
       await ref.read(pickupEventRepositoryProvider).logPickupEvent(pickupEvent);
+      await _resolveOfficeApprovalIfPresent(
+        entry,
+        notes: 'Queue reset to pending.',
+      );
       await ref
           .read(auditRepositoryProvider)
           .appendAuditEntry(
@@ -193,6 +214,20 @@ class WorkflowActionController extends AsyncNotifier<void> {
             ),
           );
     });
+  }
+
+  Future<void> approveOfficeApproval(
+    OfficeApprovalRecord record, {
+    String? notes,
+  }) async {
+    await _reviewOfficeApproval(record, approved: true, notes: notes);
+  }
+
+  Future<void> denyOfficeApproval(
+    OfficeApprovalRecord record, {
+    String? notes,
+  }) async {
+    await _reviewOfficeApproval(record, approved: false, notes: notes);
   }
 
   Future<void> createTemporaryPermission({
@@ -314,6 +349,7 @@ class WorkflowActionController extends AsyncNotifier<void> {
         ? ReleaseEvent(
             id: _generateId('release'),
             schoolId: updatedEntry.schoolId,
+            queueEntryId: updatedEntry.id,
             studentId: updatedEntry.studentId,
             guardianId: updatedEntry.guardianId,
             staffId: ref.read(currentUserProfileProvider)?.uid ?? 'staff',
@@ -333,6 +369,10 @@ class WorkflowActionController extends AsyncNotifier<void> {
         await ref
             .read(releaseEventRepositoryProvider)
             .createReleaseEvent(releaseEvent);
+        await _resolveOfficeApprovalIfPresent(
+          updatedEntry,
+          notes: 'Office approval consumed by release.',
+        );
       }
 
       await ref
@@ -417,6 +457,37 @@ class WorkflowActionController extends AsyncNotifier<void> {
 
     final students = await _loadStudents();
     final permissions = await _loadPickupPermissions();
+    final approval = await _loadOfficeApprovalForEntry(entry.id);
+    if (ref
+        .read(officeApprovalWorkflowServiceProvider)
+        .allowsRelease(approval)) {
+      return entry.copyWith(clearExceptionFlag: true);
+    }
+
+    if (approval?.isDenied == true) {
+      final message =
+          approval?.reviewNotes ??
+          'Office approval was denied. Release remains blocked.';
+      final deniedEntry = entry.copyWith(
+        exceptionFlag: message,
+        exceptionCode: PickupExceptionCode.officeApprovalDenied.name,
+        officeApprovalRequired: true,
+      );
+      if (!_queueEntriesEqual(entry, deniedEntry)) {
+        await ref.read(queueRepositoryProvider).saveQueueEntry(deniedEntry);
+      }
+      await _recordBlockedTransition(
+        deniedEntry,
+        action: 'Release blocked',
+        notes: message,
+        actorName: actorName,
+      );
+      throw PickupWorkflowException(
+        code: PickupWorkflowErrorCode.officeApprovalDenied,
+        message: message,
+      );
+    }
+
     final student = students
         .where((item) => item.id == entry.studentId)
         .firstOrNull;
@@ -429,9 +500,21 @@ class WorkflowActionController extends AsyncNotifier<void> {
           at: DateTime.now(),
         );
     if (decision.isAuthorized) {
-      return entry;
+      return entry.copyWith(clearExceptionFlag: true);
     }
 
+    final approvalRecord = ref
+        .read(officeApprovalWorkflowServiceProvider)
+        .createPending(
+          entry: entry,
+          reasonCode: decision.exceptionCode,
+          reasonMessage:
+              decision.message ??
+              'Office approval is required before this student can be released.',
+          actorUid: _actorUid,
+          actorName: actorName ?? _actorName,
+          at: DateTime.now(),
+        );
     final flaggedEntry = entry.copyWith(
       exceptionFlag:
           decision.message ??
@@ -442,6 +525,9 @@ class WorkflowActionController extends AsyncNotifier<void> {
     if (!_queueEntriesEqual(entry, flaggedEntry)) {
       await ref.read(queueRepositoryProvider).saveQueueEntry(flaggedEntry);
     }
+    await ref
+        .read(officeApprovalRepositoryProvider)
+        .saveApproval(approvalRecord);
     await _recordBlockedTransition(
       flaggedEntry,
       action: 'Release blocked',
@@ -472,6 +558,7 @@ class WorkflowActionController extends AsyncNotifier<void> {
     }
 
     final students = await _loadStudents();
+    final approvals = await _loadOfficeApprovals();
     final permissions = await _loadPickupPermissions();
     final pickupEvents = await _loadPickupEvents();
     final releaseEvents = await _loadReleaseEvents();
@@ -484,6 +571,7 @@ class WorkflowActionController extends AsyncNotifier<void> {
         .reconcileEntry(
           entry: entry,
           student: student,
+          approvals: approvals,
           permissions: permissions,
           pickupEvents: pickupEvents,
           releaseEvents: releaseEvents,
@@ -553,8 +641,82 @@ class WorkflowActionController extends AsyncNotifier<void> {
     }
   }
 
+  Future<void> _reviewOfficeApproval(
+    OfficeApprovalRecord record, {
+    required bool approved,
+    String? notes,
+  }) async {
+    final role = ref.read(resolvedRoleProvider);
+    if (role != AppRole.staff) {
+      throw const PickupWorkflowException(
+        code: PickupWorkflowErrorCode.unauthorizedRole,
+        message: 'Only staff users can review office approvals.',
+      );
+    }
+
+    final workflow = ref.read(officeApprovalWorkflowServiceProvider);
+    final reviewedRecord = approved
+        ? workflow.approve(
+            record: record,
+            reviewerUid: _actorUid,
+            reviewerName: _actorName,
+            notes: notes,
+            at: DateTime.now(),
+          )
+        : workflow.deny(
+            record: record,
+            reviewerUid: _actorUid,
+            reviewerName: _actorName,
+            notes: notes,
+            at: DateTime.now(),
+          );
+    final queueEntry = await _loadQueueEntryById(record.queueEntryId);
+    final updatedEntry = queueEntry == null
+        ? null
+        : (approved
+              ? queueEntry.copyWith(clearExceptionFlag: true)
+              : queueEntry.copyWith(
+                  exceptionFlag: notes?.trim().isNotEmpty == true
+                      ? notes!.trim()
+                      : 'Office approval denied. Release remains blocked.',
+                  exceptionCode: PickupExceptionCode.officeApprovalDenied.name,
+                  officeApprovalRequired: true,
+                ));
+
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await ref
+          .read(officeApprovalRepositoryProvider)
+          .saveApproval(reviewedRecord);
+      if (updatedEntry != null) {
+        await ref.read(queueRepositoryProvider).saveQueueEntry(updatedEntry);
+      }
+      await ref
+          .read(auditRepositoryProvider)
+          .appendAuditEntry(
+            AuditTrailEntry(
+              id: _generateId('audit'),
+              schoolId: record.schoolId,
+              studentName: record.studentName,
+              action: approved
+                  ? 'Office approval approved'
+                  : 'Office approval denied',
+              actorName: _actorName,
+              occurredAt: DateTime.now(),
+              notes: notes?.trim().isNotEmpty == true
+                  ? notes!.trim()
+                  : (approved
+                        ? 'Office approval granted for ${record.studentName}.'
+                        : 'Office approval denied for ${record.studentName}.'),
+            ),
+          );
+    });
+  }
+
   String get _actorName =>
       ref.read(currentUserProfileProvider)?.displayName ?? 'GeoTap Guardian';
+
+  String get _actorUid => ref.read(currentUserProfileProvider)?.uid ?? 'system';
 
   String _generateId(String prefix) {
     return '${prefix}_${DateTime.now().microsecondsSinceEpoch}';
@@ -577,6 +739,17 @@ class WorkflowActionController extends AsyncNotifier<void> {
     return ref
         .read(pickupEventRepositoryProvider)
         .watchPickupEvents(ref.read(currentSchoolIdProvider))
+        .first;
+  }
+
+  Future<List<OfficeApprovalRecord>> _loadOfficeApprovals() async {
+    final current = ref.read(officeApprovalsStreamProvider).asData?.value;
+    if (current != null) {
+      return current;
+    }
+    return ref
+        .read(officeApprovalRepositoryProvider)
+        .watchApprovals(ref.read(currentSchoolIdProvider))
         .first;
   }
 
@@ -610,6 +783,47 @@ class WorkflowActionController extends AsyncNotifier<void> {
     return ref
         .read(studentRepositoryProvider)
         .fetchStudents(ref.read(currentSchoolIdProvider));
+  }
+
+  Future<OfficeApprovalRecord?> _loadOfficeApprovalForEntry(
+    String queueEntryId,
+  ) async {
+    return (await _loadOfficeApprovals())
+        .where((record) => record.queueEntryId == queueEntryId)
+        .firstOrNull;
+  }
+
+  Future<PickupQueueEntry?> _loadQueueEntryById(String queueEntryId) async {
+    final current = ref.read(queueEntriesStreamProvider).asData?.value;
+    final queueEntries =
+        current ??
+        await ref
+            .read(queueRepositoryProvider)
+            .watchQueue(ref.read(currentSchoolIdProvider))
+            .first;
+    return queueEntries.where((entry) => entry.id == queueEntryId).firstOrNull;
+  }
+
+  Future<void> _resolveOfficeApprovalIfPresent(
+    PickupQueueEntry entry, {
+    required String notes,
+  }) async {
+    final approval = await _loadOfficeApprovalForEntry(entry.id);
+    if (approval == null || approval.isResolved) {
+      return;
+    }
+    final resolvedRecord = ref
+        .read(officeApprovalWorkflowServiceProvider)
+        .resolve(
+          record: approval,
+          resolverUid: _actorUid,
+          resolverName: _actorName,
+          notes: notes,
+          at: DateTime.now(),
+        );
+    await ref
+        .read(officeApprovalRepositoryProvider)
+        .saveApproval(resolvedRecord);
   }
 
   String _etaLabelFor(PickupEventType status) {

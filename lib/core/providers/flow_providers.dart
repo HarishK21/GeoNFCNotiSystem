@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/emergency_notice.dart';
 import '../../domain/models/guardian.dart';
+import '../../domain/models/office_approval_record.dart';
 import '../../domain/models/pickup_event.dart';
 import '../../domain/models/pickup_permission.dart';
 import '../../domain/models/pickup_queue_entry.dart';
@@ -120,6 +121,13 @@ final releaseEventsStreamProvider = StreamProvider<List<ReleaseEvent>>((ref) {
       .watchReleaseEvents(ref.watch(currentSchoolIdProvider));
 });
 
+final officeApprovalsStreamProvider =
+    StreamProvider<List<OfficeApprovalRecord>>((ref) {
+      return ref
+          .watch(officeApprovalRepositoryProvider)
+          .watchApprovals(ref.watch(currentSchoolIdProvider));
+    });
+
 final schoolAnnouncementsStreamProvider =
     StreamProvider<List<SchoolAnnouncement>>((ref) {
       return ref
@@ -209,6 +217,23 @@ final flaggedQueueEntriesProvider = Provider<List<PickupQueueEntry>>((ref) {
       .where((entry) => entry.hasException)
       .toList(growable: false);
 });
+
+final pendingOfficeApprovalsProvider = Provider<List<OfficeApprovalRecord>>((
+  ref,
+) {
+  final approvals =
+      ref.watch(officeApprovalsStreamProvider).asData?.value ?? const [];
+  return approvals.where((record) => record.isPending).toList(growable: false);
+});
+
+final officeApprovalByQueueEntryProvider =
+    Provider.family<OfficeApprovalRecord?, String>((ref, queueEntryId) {
+      final approvals =
+          ref.watch(officeApprovalsStreamProvider).asData?.value ?? const [];
+      return approvals
+          .where((record) => record.queueEntryId == queueEntryId)
+          .firstOrNull;
+    });
 
 final familyHistoryProvider = Provider<List<AuditEvent>>((ref) {
   final studentNames = ref

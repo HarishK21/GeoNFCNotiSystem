@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:geo_tap_guardian/domain/models/office_approval_record.dart';
+import 'package:geo_tap_guardian/domain/models/office_approval_status.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_event.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_exception_code.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_permission.dart';
@@ -19,6 +21,7 @@ void main() {
       final change = service.reconcileEntry(
         entry: _entry(eventType: PickupEventType.verified, isNfcVerified: true),
         student: _student(),
+        approvals: const [],
         permissions: const [],
         pickupEvents: [
           PickupEvent(
@@ -36,6 +39,7 @@ void main() {
           ReleaseEvent(
             id: 'release_1',
             schoolId: 'school_1',
+            queueEntryId: 'queue_1',
             studentId: 'student_1',
             guardianId: 'guardian_1',
             staffId: 'staff_1',
@@ -63,6 +67,7 @@ void main() {
         isNfcVerified: true,
       ),
       student: _student(),
+      approvals: const [],
       permissions: const [],
       pickupEvents: const [],
       releaseEvents: const [],
@@ -94,6 +99,7 @@ void main() {
           officeApprovalRequired: true,
         ),
         student: _student(),
+        approvals: const [],
         permissions: [
           PickupPermission(
             id: 'permission_1',
@@ -121,6 +127,92 @@ void main() {
       expect(change.notes, contains('Cleared system-generated release block'));
     },
   );
+
+  test('reconciliation clears blocks when office approval is approved', () {
+    final change = service.reconcileEntry(
+      entry: _entry(
+        guardianId: 'visitor_1',
+        guardianName: 'Casey Visitor',
+        eventType: PickupEventType.verified,
+        isNfcVerified: true,
+        exceptionFlag: 'Office approval pending.',
+        exceptionCode: PickupExceptionCode.unauthorizedGuardian.name,
+        officeApprovalRequired: true,
+      ),
+      student: _student(),
+      approvals: [
+        OfficeApprovalRecord(
+          id: 'queue_1',
+          schoolId: 'school_1',
+          queueEntryId: 'queue_1',
+          studentId: 'student_1',
+          guardianId: 'visitor_1',
+          studentName: 'Maya Brooks',
+          guardianName: 'Casey Visitor',
+          status: OfficeApprovalStatus.approved,
+          reasonCode: PickupExceptionCode.unauthorizedGuardian.name,
+          reasonMessage: 'Office approval pending.',
+          requestedAt: DateTime.utc(2026, 3, 17, 15, 0),
+          requestedByUid: 'staff_1',
+          requestedByName: 'Ms. Carson',
+        ),
+      ],
+      permissions: const [],
+      pickupEvents: const [],
+      releaseEvents: const [],
+      at: DateTime.utc(2026, 3, 17, 15, 12),
+    );
+
+    expect(change, isNotNull);
+    expect(change!.updatedEntry.exceptionFlag, isNull);
+    expect(change.updatedEntry.officeApprovalRequired, isFalse);
+    expect(change.notes, contains('office approval is approved'));
+  });
+
+  test('reconciliation keeps queue blocked when office approval is denied', () {
+    final change = service.reconcileEntry(
+      entry: _entry(
+        guardianId: 'visitor_1',
+        guardianName: 'Casey Visitor',
+        eventType: PickupEventType.verified,
+        isNfcVerified: true,
+      ),
+      student: _student(),
+      approvals: [
+        OfficeApprovalRecord(
+          id: 'queue_1',
+          schoolId: 'school_1',
+          queueEntryId: 'queue_1',
+          studentId: 'student_1',
+          guardianId: 'visitor_1',
+          studentName: 'Maya Brooks',
+          guardianName: 'Casey Visitor',
+          status: OfficeApprovalStatus.denied,
+          reasonCode: PickupExceptionCode.unauthorizedGuardian.name,
+          reasonMessage: 'Office approval required.',
+          requestedAt: DateTime.utc(2026, 3, 17, 15, 0),
+          requestedByUid: 'staff_1',
+          requestedByName: 'Ms. Carson',
+          reviewedAt: DateTime.utc(2026, 3, 17, 15, 3),
+          reviewedByUid: 'office_1',
+          reviewedByName: 'Front Office',
+          reviewNotes: 'Denied after custody check.',
+        ),
+      ],
+      permissions: const [],
+      pickupEvents: const [],
+      releaseEvents: const [],
+      at: DateTime.utc(2026, 3, 17, 15, 12),
+    );
+
+    expect(change, isNotNull);
+    expect(
+      change!.updatedEntry.exceptionCode,
+      PickupExceptionCode.officeApprovalDenied.name,
+    );
+    expect(change.updatedEntry.officeApprovalRequired, isTrue);
+    expect(change.updatedEntry.exceptionFlag, contains('Denied'));
+  });
 }
 
 PickupQueueEntry _entry({

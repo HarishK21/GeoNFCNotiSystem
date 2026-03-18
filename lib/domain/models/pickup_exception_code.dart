@@ -3,6 +3,7 @@ enum PickupExceptionCode {
   unauthorizedGuardian,
   expiredDelegation,
   officeApprovalRequired,
+  officeApprovalDenied,
   staleQueueState,
   conflictingEventHistory,
 }

@@ -2,6 +2,7 @@ class ReleaseEvent {
   const ReleaseEvent({
     required this.id,
     required this.schoolId,
+    required this.queueEntryId,
     required this.studentId,
     required this.guardianId,
     required this.staffId,
@@ -13,6 +14,7 @@ class ReleaseEvent {
 
   final String id;
   final String schoolId;
+  final String queueEntryId;
   final String studentId;
   final String guardianId;
   final String staffId;
@@ -25,6 +27,7 @@ class ReleaseEvent {
     return ReleaseEvent(
       id: id ?? map['id'] as String,
       schoolId: map['schoolId'] as String,
+      queueEntryId: map['queueEntryId'] as String? ?? map['id'] as String,
       studentId: map['studentId'] as String,
       guardianId: map['guardianId'] as String,
       staffId: map['staffId'] as String,
@@ -39,6 +42,7 @@ class ReleaseEvent {
     return {
       'id': id,
       'schoolId': schoolId,
+      'queueEntryId': queueEntryId,
       'studentId': studentId,
       'guardianId': guardianId,
       'staffId': staffId,

@@ -26,6 +26,7 @@ class NotificationDispatcher {
         createdAt: event.occurredAt,
         status: PushNotificationStatus.queued,
         payload: {
+          'queueEntryId': entry.id,
           'studentId': entry.studentId,
           'guardianId': entry.guardianId,
           'pickupZone': entry.pickupZone,
@@ -43,6 +44,7 @@ class NotificationDispatcher {
         createdAt: event.occurredAt,
         status: PushNotificationStatus.queued,
         payload: {
+          'queueEntryId': entry.id,
           'studentId': entry.studentId,
           'guardianId': entry.guardianId,
           'pickupZone': entry.pickupZone,
@@ -77,6 +79,7 @@ class NotificationDispatcher {
         createdAt: releaseEvent.releasedAt,
         status: PushNotificationStatus.queued,
         payload: {
+          'queueEntryId': entry.id,
           'studentId': entry.studentId,
           'guardianId': entry.guardianId,
           'releaseEventId': releaseEvent.id,

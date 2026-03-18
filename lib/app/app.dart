@@ -12,6 +12,7 @@ class GeoTapGuardianApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(deviceIntegrationBootstrapProvider);
     ref.watch(workflowHardeningBootstrapProvider);
+    ref.watch(notificationSubscriptionBootstrapProvider);
 
     return MaterialApp.router(
       title: 'GeoTap Guardian',

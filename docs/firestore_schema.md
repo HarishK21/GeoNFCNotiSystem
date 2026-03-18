@@ -36,6 +36,7 @@ Subcollections:
 - `pickupPermissions`
 - `pickupEvents`
 - `releaseEvents`
+- `officeApprovals`
 - `announcements`
 - `emergencyNotices`
 - `queue`
@@ -94,6 +95,7 @@ Fields:
 
 Fields:
 - `schoolId`: string
+- `queueEntryId`: string
 - `studentId`: string
 - `guardianId`: string
 - `staffId`: string
@@ -101,6 +103,31 @@ Fields:
 - `releasedAt`: timestamp
 - `verificationMethod`: string
 - `notes`: string or null
+
+### `schools/{schoolId}/officeApprovals/{queueEntryId}`
+
+Explicit backend approval record for queue items that need staff or office review before release can continue.
+
+Fields:
+- `schoolId`: string
+- `queueEntryId`: string
+- `studentId`: string
+- `guardianId`: string
+- `studentName`: string
+- `guardianName`: string
+- `status`: `pending`, `approved`, `denied`, or `resolved`
+- `reasonCode`: string
+- `reasonMessage`: string
+- `requestedAt`: timestamp
+- `requestedByUid`: string
+- `requestedByName`: string
+- `reviewedAt`: timestamp or null
+- `reviewedByUid`: string or null
+- `reviewedByName`: string or null
+- `reviewNotes`: string or null
+- `resolvedAt`: timestamp or null
+- `resolvedByUid`: string or null
+- `resolvedByName`: string or null
 
 ### `schools/{schoolId}/announcements/{announcementId}`
 
@@ -166,6 +193,10 @@ Fields:
 - `createdAt`: timestamp
 - `status`: `queued`, `sent`, or `failed`
 - `payload`: map<string, dynamic>
+- `attemptCount`: int
+- `lastAttemptAt`: timestamp or null
+- `deliveredAt`: timestamp or null
+- `lastError`: string or null
 
 ## Repository Mapping Notes
 
@@ -173,6 +204,7 @@ Fields:
 - `userProfiles/{uid}` resolves the app role, `schoolId`, and optional linked guardian record.
 - Role-specific screens share one router while provider guards enforce role access from the resolved profile.
 - `queue` and `auditTrail` are projection collections so the UI does not need to join multiple collections just to paint the queue or event history.
+- `officeApprovals` is a backend-facing workflow record keyed by queue entry. It allows explicit override handling without weakening the core queue projection.
 - `notificationJobs` is an integration collection for FCM or Cloud Functions fan-out and is safe to keep optional in mock mode.
 - Queue mutations should be written through app logic that preserves the allowed progression: `pending -> approaching -> verified -> released`.
 
@@ -183,5 +215,6 @@ Fields:
 - Staff access is limited to the same school and is expected to be the only path that can complete release and administrative audit actions.
 - Firestore rules should treat queue, pickup events, release events, and audit entries as school-scoped projection data.
 - Temporary pickup permissions should be validated against the linked guardian and their active time window.
-- Release should only be possible when the queue entry is already verified on-site, `isNfcVerified` is true, and no office-approval block is active.
+- Release should only be possible when the queue entry is already verified on-site, `isNfcVerified` is true, and either no office-approval block is active or `officeApprovals/{queueEntryId}` is approved.
 - Queue reconciliation may repair stale queue projections from newer pickup or release events and should leave an audit entry when it does so.
+- Backend functions may mirror approval decisions into queue and audit collections so client state and backend state converge even if the device misses an update.

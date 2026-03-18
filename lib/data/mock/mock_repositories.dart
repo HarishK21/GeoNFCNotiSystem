@@ -2,6 +2,7 @@ import '../../core/models/app_role.dart';
 import '../../domain/models/audit_trail_entry.dart';
 import '../../domain/models/emergency_notice.dart';
 import '../../domain/models/guardian.dart';
+import '../../domain/models/office_approval_record.dart';
 import '../../domain/models/pickup_event.dart';
 import '../../domain/models/pickup_permission.dart';
 import '../../domain/models/pickup_queue_entry.dart';
@@ -15,6 +16,7 @@ import '../../domain/repositories/audit_repository.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/guardian_repository.dart';
 import '../../domain/repositories/notice_repository.dart';
+import '../../domain/repositories/office_approval_repository.dart';
 import '../../domain/repositories/pickup_event_repository.dart';
 import '../../domain/repositories/pickup_permission_repository.dart';
 import '../../domain/repositories/push_notification_repository.dart';
@@ -214,6 +216,22 @@ class MockPushNotificationRepository implements PushNotificationRepository {
   @override
   Stream<List<PushNotificationJob>> watchJobs(String schoolId) {
     return _store.watchNotificationJobs(schoolId);
+  }
+}
+
+class MockOfficeApprovalRepository implements OfficeApprovalRepository {
+  const MockOfficeApprovalRepository(this._store);
+
+  final MockDataStore _store;
+
+  @override
+  Future<void> saveApproval(OfficeApprovalRecord record) {
+    return _store.saveOfficeApproval(record);
+  }
+
+  @override
+  Stream<List<OfficeApprovalRecord>> watchApprovals(String schoolId) {
+    return _store.watchOfficeApprovals(schoolId);
   }
 }
 

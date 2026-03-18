@@ -5,6 +5,7 @@ import '../../core/models/app_role.dart';
 import '../../domain/models/audit_trail_entry.dart';
 import '../../domain/models/emergency_notice.dart';
 import '../../domain/models/guardian.dart';
+import '../../domain/models/office_approval_record.dart';
 import '../../domain/models/pickup_event.dart';
 import '../../domain/models/pickup_permission.dart';
 import '../../domain/models/pickup_queue_entry.dart';
@@ -18,6 +19,7 @@ import '../../domain/repositories/audit_repository.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/guardian_repository.dart';
 import '../../domain/repositories/notice_repository.dart';
+import '../../domain/repositories/office_approval_repository.dart';
 import '../../domain/repositories/pickup_event_repository.dart';
 import '../../domain/repositories/pickup_permission_repository.dart';
 import '../../domain/repositories/push_notification_repository.dart';
@@ -399,7 +401,16 @@ class FirestorePushNotificationRepository
         .doc(job.schoolId)
         .collection('notificationJobs')
         .doc(job.id)
-        .set({...job.toMap(), 'createdAt': Timestamp.fromDate(job.createdAt)});
+        .set({
+          ...job.toMap(),
+          'createdAt': Timestamp.fromDate(job.createdAt),
+          'lastAttemptAt': job.lastAttemptAt == null
+              ? null
+              : Timestamp.fromDate(job.lastAttemptAt!),
+          'deliveredAt': job.deliveredAt == null
+              ? null
+              : Timestamp.fromDate(job.deliveredAt!),
+        });
   }
 
   @override
@@ -419,6 +430,70 @@ class FirestorePushNotificationRepository
                   'createdAt': readFirestoreDate(
                     data['createdAt'],
                   ).toIso8601String(),
+                  'lastAttemptAt': data['lastAttemptAt'] == null
+                      ? null
+                      : readFirestoreDate(
+                          data['lastAttemptAt'],
+                        ).toIso8601String(),
+                  'deliveredAt': data['deliveredAt'] == null
+                      ? null
+                      : readFirestoreDate(
+                          data['deliveredAt'],
+                        ).toIso8601String(),
+                }, id: doc.id);
+              })
+              .toList(growable: false),
+        );
+  }
+}
+
+class FirestoreOfficeApprovalRepository implements OfficeApprovalRepository {
+  const FirestoreOfficeApprovalRepository(this._firestore);
+
+  final FirebaseFirestore _firestore;
+
+  @override
+  Future<void> saveApproval(OfficeApprovalRecord record) {
+    return _firestore
+        .collection('schools')
+        .doc(record.schoolId)
+        .collection('officeApprovals')
+        .doc(record.id)
+        .set({
+          ...record.toMap(),
+          'requestedAt': Timestamp.fromDate(record.requestedAt),
+          'reviewedAt': record.reviewedAt == null
+              ? null
+              : Timestamp.fromDate(record.reviewedAt!),
+          'resolvedAt': record.resolvedAt == null
+              ? null
+              : Timestamp.fromDate(record.resolvedAt!),
+        });
+  }
+
+  @override
+  Stream<List<OfficeApprovalRecord>> watchApprovals(String schoolId) {
+    return _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('officeApprovals')
+        .orderBy('requestedAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) {
+                final data = doc.data();
+                return OfficeApprovalRecord.fromMap({
+                  ...data,
+                  'requestedAt': readFirestoreDate(
+                    data['requestedAt'],
+                  ).toIso8601String(),
+                  'reviewedAt': data['reviewedAt'] == null
+                      ? null
+                      : readFirestoreDate(data['reviewedAt']).toIso8601String(),
+                  'resolvedAt': data['resolvedAt'] == null
+                      ? null
+                      : readFirestoreDate(data['resolvedAt']).toIso8601String(),
                 }, id: doc.id);
               })
               .toList(growable: false),

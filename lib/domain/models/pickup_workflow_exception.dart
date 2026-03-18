@@ -3,6 +3,7 @@ enum PickupWorkflowErrorCode {
   unauthorizedGuardian,
   expiredDelegation,
   officeApprovalRequired,
+  officeApprovalDenied,
   unauthorizedRole,
 }
 

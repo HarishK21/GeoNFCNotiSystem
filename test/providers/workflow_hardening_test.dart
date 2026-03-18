@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:geo_tap_guardian/core/models/app_role.dart';
 import 'package:geo_tap_guardian/core/providers/app_providers.dart';
+import 'package:geo_tap_guardian/domain/models/office_approval_status.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_event.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_exception_code.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_permission.dart';
@@ -127,8 +128,166 @@ void main() {
         ),
         isTrue,
       );
+      final approval = store.officeApprovals.firstWhere(
+        (record) => record.queueEntryId == unauthorizedEntry.id,
+      );
+      expect(approval.status, OfficeApprovalStatus.pending);
+      expect(
+        approval.reasonCode,
+        PickupExceptionCode.unauthorizedGuardian.name,
+      );
     },
   );
+
+  test(
+    'approving an office approval clears the queue block and allows release',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final queueSubscription = container.listen(
+        queueEntriesStreamProvider,
+        (previous, next) {},
+      );
+      final approvalSubscription = container.listen(
+        officeApprovalsStreamProvider,
+        (previous, next) {},
+      );
+      addTearDown(queueSubscription.close);
+      addTearDown(approvalSubscription.close);
+
+      await container
+          .read(authActionControllerProvider.notifier)
+          .signInAsDemoRole(AppRole.staff);
+      await _waitFor(
+        () =>
+            container.read(currentUserProfileStreamProvider).asData?.value !=
+            null,
+      );
+      await _waitFor(() => container.read(queueEntriesStreamProvider).hasValue);
+
+      final queueRepository = container.read(queueRepositoryProvider);
+      final store = container.read(mockDataStoreProvider);
+      final unauthorizedEntry = store.queueEntries
+          .firstWhere((entry) => entry.studentId == 'student_maya')
+          .copyWith(
+            guardianId: 'visitor_casey',
+            guardianName: 'Casey Visitor',
+            eventType: PickupEventType.verified,
+            isNfcVerified: true,
+            etaLabel: 'Ready',
+            clearExceptionFlag: true,
+          );
+      await queueRepository.saveQueueEntry(unauthorizedEntry);
+
+      await expectLater(
+        container
+            .read(workflowActionControllerProvider.notifier)
+            .releaseStudent(unauthorizedEntry),
+        throwsA(isA<PickupWorkflowException>()),
+      );
+
+      final pendingApproval = store.officeApprovals.firstWhere(
+        (record) => record.queueEntryId == unauthorizedEntry.id,
+      );
+
+      await container
+          .read(workflowActionControllerProvider.notifier)
+          .approveOfficeApproval(pendingApproval);
+
+      final refreshedEntry = store.queueEntries.firstWhere(
+        (entry) => entry.studentId == 'student_maya',
+      );
+      expect(refreshedEntry.officeApprovalRequired, isFalse);
+      expect(refreshedEntry.exceptionFlag, isNull);
+
+      await container
+          .read(workflowActionControllerProvider.notifier)
+          .releaseStudent(refreshedEntry);
+
+      expect(
+        store.releaseEvents.any(
+          (event) => event.queueEntryId == unauthorizedEntry.id,
+        ),
+        isTrue,
+      );
+      expect(
+        store.officeApprovals
+            .firstWhere((record) => record.queueEntryId == unauthorizedEntry.id)
+            .status,
+        OfficeApprovalStatus.resolved,
+      );
+    },
+  );
+
+  test('denied office approval keeps release blocked', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final queueSubscription = container.listen(
+      queueEntriesStreamProvider,
+      (previous, next) {},
+    );
+    addTearDown(queueSubscription.close);
+
+    await container
+        .read(authActionControllerProvider.notifier)
+        .signInAsDemoRole(AppRole.staff);
+    await _waitFor(
+      () =>
+          container.read(currentUserProfileStreamProvider).asData?.value !=
+          null,
+    );
+    await _waitFor(() => container.read(queueEntriesStreamProvider).hasValue);
+
+    final queueRepository = container.read(queueRepositoryProvider);
+    final store = container.read(mockDataStoreProvider);
+    final unauthorizedEntry = store.queueEntries
+        .firstWhere((entry) => entry.studentId == 'student_maya')
+        .copyWith(
+          guardianId: 'visitor_casey',
+          guardianName: 'Casey Visitor',
+          eventType: PickupEventType.verified,
+          isNfcVerified: true,
+          etaLabel: 'Ready',
+          clearExceptionFlag: true,
+        );
+    await queueRepository.saveQueueEntry(unauthorizedEntry);
+
+    await expectLater(
+      container
+          .read(workflowActionControllerProvider.notifier)
+          .releaseStudent(unauthorizedEntry),
+      throwsA(isA<PickupWorkflowException>()),
+    );
+
+    final pendingApproval = store.officeApprovals.firstWhere(
+      (record) => record.queueEntryId == unauthorizedEntry.id,
+    );
+
+    await container
+        .read(workflowActionControllerProvider.notifier)
+        .denyOfficeApproval(
+          pendingApproval,
+          notes: 'Denied after custody check.',
+        );
+
+    final deniedEntry = store.queueEntries.firstWhere(
+      (entry) => entry.studentId == 'student_maya',
+    );
+    expect(deniedEntry.officeApprovalRequired, isTrue);
+    expect(
+      deniedEntry.exceptionCode,
+      PickupExceptionCode.officeApprovalDenied.name,
+    );
+
+    await expectLater(
+      container
+          .read(workflowActionControllerProvider.notifier)
+          .releaseStudent(deniedEntry),
+      throwsA(isA<PickupWorkflowException>()),
+    );
+  });
 
   test(
     'active delegation allows release and queues a release-completed notification',

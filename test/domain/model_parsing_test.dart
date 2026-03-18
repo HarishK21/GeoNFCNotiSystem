@@ -4,9 +4,12 @@ import 'package:geo_tap_guardian/core/models/app_role.dart';
 import 'package:geo_tap_guardian/domain/models/emergency_notice.dart';
 import 'package:geo_tap_guardian/domain/models/geofence_trigger_event.dart';
 import 'package:geo_tap_guardian/domain/models/nfc_verification_event.dart';
+import 'package:geo_tap_guardian/domain/models/office_approval_record.dart';
+import 'package:geo_tap_guardian/domain/models/office_approval_status.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_queue_entry.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_permission.dart';
 import 'package:geo_tap_guardian/domain/models/push_notification_job.dart';
+import 'package:geo_tap_guardian/domain/models/release_event.dart';
 import 'package:geo_tap_guardian/domain/models/user_profile.dart';
 
 void main() {
@@ -151,10 +154,62 @@ void main() {
       'createdAt': '2026-03-17T15:15:00Z',
       'status': 'queued',
       'payload': {'studentId': 'student_1', 'guardianId': 'guardian_1'},
+      'attemptCount': 0,
+      'lastAttemptAt': null,
+      'deliveredAt': null,
+      'lastError': null,
     });
 
     expect(job.type, PushNotificationType.guardianApproaching);
     expect(job.status, PushNotificationStatus.queued);
     expect(job.payload['studentId'], 'student_1');
+    expect(job.attemptCount, 0);
+  });
+
+  test('release event parsing keeps queue entry linkage', () {
+    final event = ReleaseEvent.fromMap({
+      'id': 'release_1',
+      'schoolId': 'school_1',
+      'queueEntryId': 'queue_1',
+      'studentId': 'student_1',
+      'guardianId': 'guardian_1',
+      'staffId': 'staff_1',
+      'staffName': 'Ms. Carson',
+      'releasedAt': '2026-03-17T15:20:00Z',
+      'verificationMethod': 'nfc-verified-release',
+      'notes': 'Released after approval.',
+    });
+
+    expect(event.queueEntryId, 'queue_1');
+    expect(event.verificationMethod, 'nfc-verified-release');
+  });
+
+  test('office approval parsing resolves status and audit fields', () {
+    final approval = OfficeApprovalRecord.fromMap({
+      'id': 'queue_1',
+      'schoolId': 'school_1',
+      'queueEntryId': 'queue_1',
+      'studentId': 'student_1',
+      'guardianId': 'guardian_1',
+      'studentName': 'Maya Brooks',
+      'guardianName': 'Andrea Brooks',
+      'status': 'approved',
+      'reasonCode': 'unauthorizedGuardian',
+      'reasonMessage': 'Office approval required.',
+      'requestedAt': '2026-03-17T15:00:00Z',
+      'requestedByUid': 'staff_1',
+      'requestedByName': 'Ms. Carson',
+      'reviewedAt': '2026-03-17T15:05:00Z',
+      'reviewedByUid': 'office_1',
+      'reviewedByName': 'Front Desk',
+      'reviewNotes': 'Approved after ID check.',
+      'resolvedAt': null,
+      'resolvedByUid': null,
+      'resolvedByName': null,
+    });
+
+    expect(approval.status, OfficeApprovalStatus.approved);
+    expect(approval.reviewedByName, 'Front Desk');
+    expect(approval.isApproved, isTrue);
   });
 }

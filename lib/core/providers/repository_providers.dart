@@ -10,6 +10,7 @@ import '../../domain/repositories/audit_repository.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/guardian_repository.dart';
 import '../../domain/repositories/notice_repository.dart';
+import '../../domain/repositories/office_approval_repository.dart';
 import '../../domain/repositories/pickup_event_repository.dart';
 import '../../domain/repositories/pickup_permission_repository.dart';
 import '../../domain/repositories/push_notification_repository.dart';
@@ -136,3 +137,13 @@ final pushNotificationRepositoryProvider = Provider<PushNotificationRepository>(
     return MockPushNotificationRepository(ref.watch(mockDataStoreProvider));
   },
 );
+
+final officeApprovalRepositoryProvider = Provider<OfficeApprovalRepository>((
+  ref,
+) {
+  final environment = ref.watch(appEnvironmentProvider);
+  if (environment.dataSource == AppDataSource.firebase) {
+    return FirestoreOfficeApprovalRepository(FirebaseFirestore.instance);
+  }
+  return MockOfficeApprovalRepository(ref.watch(mockDataStoreProvider));
+});

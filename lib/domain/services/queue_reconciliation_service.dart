@@ -1,3 +1,4 @@
+import '../models/office_approval_record.dart';
 import '../models/pickup_event.dart';
 import '../models/pickup_exception_code.dart';
 import '../models/pickup_permission.dart';
@@ -26,6 +27,7 @@ class QueueReconciliationService {
   List<QueueReconciliationChange> reconcileSchoolQueue({
     required List<PickupQueueEntry> queueEntries,
     required List<Student> students,
+    required List<OfficeApprovalRecord> approvals,
     required List<PickupPermission> permissions,
     required List<PickupEvent> pickupEvents,
     required List<ReleaseEvent> releaseEvents,
@@ -37,6 +39,7 @@ class QueueReconciliationService {
           (entry) => reconcileEntry(
             entry: entry,
             student: studentById[entry.studentId],
+            approvals: approvals,
             permissions: permissions,
             pickupEvents: pickupEvents,
             releaseEvents: releaseEvents,
@@ -50,6 +53,7 @@ class QueueReconciliationService {
   QueueReconciliationChange? reconcileEntry({
     required PickupQueueEntry entry,
     required Student? student,
+    required List<OfficeApprovalRecord> approvals,
     required List<PickupPermission> permissions,
     required List<PickupEvent> pickupEvents,
     required List<ReleaseEvent> releaseEvents,
@@ -60,6 +64,7 @@ class QueueReconciliationService {
 
     final latestPickup = _latestPickupEvent(entry, pickupEvents);
     final latestRelease = _latestReleaseEvent(entry, releaseEvents);
+    final approval = _approvalForEntry(entry, approvals);
     final canonicalStatus = _canonicalStatus(
       current: updatedEntry.eventType,
       latestPickup: latestPickup,
@@ -85,34 +90,58 @@ class QueueReconciliationService {
       );
     }
 
-    final decision = _authorizationService.evaluate(
-      entry: updatedEntry,
-      student: student,
-      permissions: permissions,
-      at: at,
-    );
-    if (decision.isAuthorized) {
-      if (isSystemManagedPickupException(updatedEntry.exceptionCode) ||
-          updatedEntry.officeApprovalRequired) {
+    if (approval?.isApproved == true) {
+      if (updatedEntry.hasException) {
         updatedEntry = updatedEntry.copyWith(clearExceptionFlag: true);
-        notes.add(
-          'Cleared system-generated release block after authorization re-check.',
-        );
+        notes.add('Cleared queue block because office approval is approved.');
       }
-    } else {
-      final issueMessage =
-          decision.message ??
-          'Office approval is required before this student can be released.';
-      if (updatedEntry.exceptionFlag != issueMessage ||
-          updatedEntry.exceptionCode != decision.exceptionCode?.name ||
-          updatedEntry.officeApprovalRequired !=
-              decision.requiresOfficeApproval) {
+    } else if (approval?.isDenied == true) {
+      final denialMessage =
+          approval?.reviewNotes ??
+          'Office approval denied. Release remains blocked.';
+      if (updatedEntry.exceptionFlag != denialMessage ||
+          updatedEntry.exceptionCode !=
+              PickupExceptionCode.officeApprovalDenied.name ||
+          updatedEntry.officeApprovalRequired != true) {
         updatedEntry = updatedEntry.copyWith(
-          exceptionFlag: issueMessage,
-          exceptionCode: decision.exceptionCode?.name,
-          officeApprovalRequired: decision.requiresOfficeApproval,
+          exceptionFlag: denialMessage,
+          exceptionCode: PickupExceptionCode.officeApprovalDenied.name,
+          officeApprovalRequired: true,
         );
-        notes.add(issueMessage);
+        notes.add(denialMessage);
+      }
+    }
+
+    if (approval?.isApproved != true && approval?.isDenied != true) {
+      final decision = _authorizationService.evaluate(
+        entry: updatedEntry,
+        student: student,
+        permissions: permissions,
+        at: at,
+      );
+      if (decision.isAuthorized) {
+        if (isSystemManagedPickupException(updatedEntry.exceptionCode) ||
+            updatedEntry.officeApprovalRequired) {
+          updatedEntry = updatedEntry.copyWith(clearExceptionFlag: true);
+          notes.add(
+            'Cleared system-generated release block after authorization re-check.',
+          );
+        }
+      } else {
+        final issueMessage =
+            decision.message ??
+            'Office approval is required before this student can be released.';
+        if (updatedEntry.exceptionFlag != issueMessage ||
+            updatedEntry.exceptionCode != decision.exceptionCode?.name ||
+            updatedEntry.officeApprovalRequired !=
+                decision.requiresOfficeApproval) {
+          updatedEntry = updatedEntry.copyWith(
+            exceptionFlag: issueMessage,
+            exceptionCode: decision.exceptionCode?.name,
+            officeApprovalRequired: decision.requiresOfficeApproval,
+          );
+          notes.add(issueMessage);
+        }
       }
     }
 
@@ -145,6 +174,16 @@ ReleaseEvent? _latestReleaseEvent(
   return _latestByTime<ReleaseEvent>(
     releaseEvents.where((event) => event.studentId == entry.studentId),
     (event) => event.releasedAt,
+  );
+}
+
+OfficeApprovalRecord? _approvalForEntry(
+  PickupQueueEntry entry,
+  List<OfficeApprovalRecord> approvals,
+) {
+  return _latestByTime<OfficeApprovalRecord>(
+    approvals.where((approval) => approval.queueEntryId == entry.id),
+    (approval) => approval.requestedAt,
   );
 }
 

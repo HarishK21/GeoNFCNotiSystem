@@ -95,6 +95,25 @@ Validation commands:
 - `puro -e geotap flutter analyze`
 - `puro -e geotap flutter test`
 
+### 6. Backend approval and delivery infrastructure
+- Add explicit `officeApprovals` workflow records with pending, approved, denied, and resolved states.
+- Strengthen Firestore release enforcement so release writes reference the queue item and, when needed, a matching approved office-approval record.
+- Add Firebase deployment scaffolding with Firestore indexes, Firebase config, and Cloud Functions or worker code for notification delivery and approval projection sync.
+- Preserve mock mode while extending tests and docs to cover approval review, notification delivery boundaries, and final live-validation preparation.
+
+Acceptance criteria:
+- Unauthorized or expired release attempts create a persistent office-approval record instead of only a transient queue flag.
+- Approved office-approval records clear the queue block and allow release, while denied records keep release blocked.
+- `notificationJobs` include delivery-tracking fields suitable for a backend worker or Cloud Function, and backend scaffolding exists in the repo for FCM topic delivery.
+- Firestore rules, indexes, deployment config, and Firebase setup docs reflect the approval and notification-delivery flow.
+- A clear live-validation checklist exists for the next milestone.
+
+Validation commands:
+- `puro -e geotap flutter pub get`
+- `puro -e geotap dart format lib test`
+- `puro -e geotap flutter analyze`
+- `puro -e geotap flutter test`
+
 ## Current next milestone
 
-Next up is Milestone 6: add backend delivery and approval infrastructure, including Cloud Functions or server workers for notificationJobs, stronger Firestore release enforcement, and office-approval workflows.
+Next up is Milestone 7: execute final live validation against a configured Firebase project and Android device hardware, including end-to-end auth, approval, notification delivery, geofence, NFC, and release confirmation checks.

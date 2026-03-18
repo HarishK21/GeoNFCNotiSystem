@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/app_providers.dart';
 import '../../../../core/widgets/content_state_card.dart';
 import '../../../../core/widgets/dashboard_card.dart';
+import '../../../../domain/models/office_approval_status.dart';
 import '../../../../domain/models/pickup_queue_entry.dart';
 import '../widgets/workflow_action_feedback.dart';
 
@@ -16,6 +17,7 @@ class StaffAnnouncementsScreen extends ConsumerWidget {
     final workflowAction = ref.watch(workflowActionControllerProvider);
     final liveQueue = ref.watch(liveQueueEntriesProvider);
     final flaggedEntries = ref.watch(flaggedQueueEntriesProvider);
+    final pendingApprovals = ref.watch(pendingOfficeApprovalsProvider);
     final readyToFlag = liveQueue
         .where((entry) => !entry.hasException)
         .toList(growable: false);
@@ -30,7 +32,7 @@ class StaffAnnouncementsScreen extends ConsumerWidget {
         DashboardCard(
           title: 'Exception flags',
           subtitle:
-              '${flaggedEntries.length} active flag${flaggedEntries.length == 1 ? '' : 's'} need staff attention',
+              '${flaggedEntries.length} active flag${flaggedEntries.length == 1 ? '' : 's'} need staff attention | ${pendingApprovals.length} pending office approval${pendingApprovals.length == 1 ? '' : 's'}',
           icon: Icons.flag_rounded,
           child: const Text(
             'Flags do not replace verification and release rules. They provide a fast staff-visible note when a pickup needs extra attention.',
@@ -60,31 +62,7 @@ class StaffAnnouncementsScreen extends ConsumerWidget {
           const SizedBox(height: 16),
         ] else ...[
           for (final entry in flaggedEntries) ...[
-            DashboardCard(
-              title: entry.studentName,
-              subtitle: '${entry.guardianName} | ${entry.pickupZone}',
-              icon: Icons.flag_circle_rounded,
-              trailing: const Chip(label: Text('Flagged')),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(entry.exceptionFlag ?? 'Flagged for follow-up.'),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: () => runWorkflowAction(
-                      context,
-                      ref,
-                      successMessage: 'Flag cleared for ${entry.studentName}.',
-                      action: () => ref
-                          .read(workflowActionControllerProvider.notifier)
-                          .clearException(entry),
-                    ),
-                    icon: const Icon(Icons.check_circle_outline_rounded),
-                    label: const Text('Clear flag'),
-                  ),
-                ],
-              ),
-            ),
+            _FlaggedEntryCard(entry: entry),
             const SizedBox(height: 16),
           ],
         ],
@@ -134,6 +112,90 @@ class StaffAnnouncementsScreen extends ConsumerWidget {
       action: () => ref
           .read(workflowActionControllerProvider.notifier)
           .flagException(entry, reason.trim()),
+    );
+  }
+}
+
+class _FlaggedEntryCard extends ConsumerWidget {
+  const _FlaggedEntryCard({required this.entry});
+
+  final PickupQueueEntry entry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final approval = ref.watch(officeApprovalByQueueEntryProvider(entry.id));
+    final approvalLabel = switch (approval?.status) {
+      OfficeApprovalStatus.pending => 'Approval pending',
+      OfficeApprovalStatus.approved => 'Approved',
+      OfficeApprovalStatus.denied => 'Denied',
+      OfficeApprovalStatus.resolved => 'Resolved',
+      null => 'Flagged',
+    };
+
+    return DashboardCard(
+      title: entry.studentName,
+      subtitle: '${entry.guardianName} | ${entry.pickupZone}',
+      icon: Icons.flag_circle_rounded,
+      trailing: Chip(label: Text(approvalLabel)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(entry.exceptionFlag ?? 'Flagged for follow-up.'),
+          if (approval != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Office approval record: ${approval.status.name}. Requested by ${approval.requestedByName}.',
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              if (approval != null && !approval.isApproved)
+                FilledButton.icon(
+                  onPressed: () => runWorkflowAction(
+                    context,
+                    ref,
+                    successMessage:
+                        'Office approval granted for ${entry.studentName}.',
+                    action: () => ref
+                        .read(workflowActionControllerProvider.notifier)
+                        .approveOfficeApproval(approval),
+                  ),
+                  icon: const Icon(Icons.verified_user_outlined),
+                  label: const Text('Approve release'),
+                ),
+              if (approval != null)
+                OutlinedButton.icon(
+                  onPressed: () => runWorkflowAction(
+                    context,
+                    ref,
+                    successMessage:
+                        'Office approval updated for ${entry.studentName}.',
+                    action: () => ref
+                        .read(workflowActionControllerProvider.notifier)
+                        .denyOfficeApproval(approval),
+                  ),
+                  icon: const Icon(Icons.block_outlined),
+                  label: const Text('Deny release'),
+                ),
+              FilledButton.icon(
+                onPressed: () => runWorkflowAction(
+                  context,
+                  ref,
+                  successMessage: 'Flag cleared for ${entry.studentName}.',
+                  action: () => ref
+                      .read(workflowActionControllerProvider.notifier)
+                      .clearException(entry),
+                ),
+                icon: const Icon(Icons.check_circle_outline_rounded),
+                label: const Text('Clear flag'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
