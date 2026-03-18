@@ -181,6 +181,73 @@ void main() {
       expect(nfcStatus.listening, isFalse);
     },
   );
+
+  test(
+    'NFC verification with the wrong guardian id is rejected without changing the queue',
+    () async {
+      final geofencing = FakeGeofencingService();
+      final nfc = FakeNfcService();
+      final container = ProviderContainer(
+        overrides: [
+          geofencingServiceProvider.overrideWithValue(geofencing),
+          nfcServiceProvider.overrideWithValue(nfc),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await geofencing.dispose();
+        await nfc.dispose();
+      });
+
+      final queueSubscription = container.listen(
+        queueEntriesStreamProvider,
+        (previous, next) {},
+      );
+      addTearDown(queueSubscription.close);
+
+      container.read(deviceIntegrationBootstrapProvider);
+      await container
+          .read(authActionControllerProvider.notifier)
+          .signInAsDemoRole(AppRole.staff);
+      await _waitFor(
+        () =>
+            container.read(currentUserProfileStreamProvider).asData?.value !=
+            null,
+        description: 'staff profile resolution for wrong-guardian NFC test',
+      );
+      await _waitFor(
+        () => container.read(queueEntriesStreamProvider).hasValue,
+        description: 'staff queue hydration for wrong-guardian NFC test',
+      );
+
+      final originalEntry = _queueEntryFor(container, 'student_maya');
+      final wrongTarget = NfcVerificationTarget(
+        schoolId: originalEntry.schoolId,
+        studentId: originalEntry.studentId,
+        guardianId: 'guardian_wrong',
+        studentName: originalEntry.studentName,
+        guardianName: 'Wrong Guardian',
+      );
+
+      await container
+          .read(deviceActionControllerProvider.notifier)
+          .simulateVerified(wrongTarget);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      final store = container.read(mockDataStoreProvider);
+      final unchangedEntry = _queueEntryFor(container, 'student_maya');
+
+      expect(unchangedEntry.eventType, PickupEventType.approaching);
+      expect(
+        store.pickupEvents.any(
+          (event) =>
+              event.studentId == 'student_maya' &&
+              event.type == PickupEventType.verified,
+        ),
+        isFalse,
+      );
+    },
+  );
 }
 
 PickupQueueEntry _queueEntryFor(ProviderContainer container, String studentId) {

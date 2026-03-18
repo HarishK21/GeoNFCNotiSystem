@@ -25,6 +25,13 @@ class PickupPermission {
   final DateTime endsAt;
   final bool isActive;
 
+  bool isActiveAt(DateTime value) {
+    if (!isActive) {
+      return false;
+    }
+    return !value.isBefore(startsAt) && !value.isAfter(endsAt);
+  }
+
   factory PickupPermission.fromMap(Map<String, dynamic> map, {String? id}) {
     return PickupPermission(
       id: id ?? map['id'] as String,

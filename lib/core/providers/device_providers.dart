@@ -274,12 +274,10 @@ PickupQueueEntry? _findQueueEntry(
   required String guardianId,
 }) {
   return _firstOrNull(
-        queueEntries.where(
-          (entry) =>
-              entry.studentId == studentId && entry.guardianId == guardianId,
-        ),
-      ) ??
-      _firstOrNull(queueEntries.where((entry) => entry.studentId == studentId));
+    queueEntries.where(
+      (entry) => entry.studentId == studentId && entry.guardianId == guardianId,
+    ),
+  );
 }
 
 extension _FirstOrNullExtension<T> on Iterable<T> {

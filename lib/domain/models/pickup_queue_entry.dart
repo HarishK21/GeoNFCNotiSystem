@@ -14,6 +14,8 @@ class PickupQueueEntry {
     required this.eventType,
     required this.isNfcVerified,
     this.exceptionFlag,
+    this.exceptionCode,
+    this.officeApprovalRequired = false,
   });
 
   final String id;
@@ -28,12 +30,16 @@ class PickupQueueEntry {
   final PickupEventType eventType;
   final bool isNfcVerified;
   final String? exceptionFlag;
+  final String? exceptionCode;
+  final bool officeApprovalRequired;
 
   bool get canMarkApproaching => eventType == PickupEventType.pending;
   bool get canVerify => eventType == PickupEventType.approaching;
   bool get canRelease => eventType == PickupEventType.verified;
   bool get isReleased => eventType == PickupEventType.released;
-  bool get hasException => exceptionFlag != null && exceptionFlag!.isNotEmpty;
+  bool get hasException =>
+      officeApprovalRequired ||
+      (exceptionFlag != null && exceptionFlag!.isNotEmpty);
 
   PickupQueueEntry copyWith({
     String? id,
@@ -48,6 +54,8 @@ class PickupQueueEntry {
     PickupEventType? eventType,
     bool? isNfcVerified,
     String? exceptionFlag,
+    String? exceptionCode,
+    bool? officeApprovalRequired,
     bool clearExceptionFlag = false,
   }) {
     return PickupQueueEntry(
@@ -65,6 +73,12 @@ class PickupQueueEntry {
       exceptionFlag: clearExceptionFlag
           ? null
           : (exceptionFlag ?? this.exceptionFlag),
+      exceptionCode: clearExceptionFlag
+          ? null
+          : (exceptionCode ?? this.exceptionCode),
+      officeApprovalRequired: clearExceptionFlag
+          ? false
+          : (officeApprovalRequired ?? this.officeApprovalRequired),
     );
   }
 
@@ -85,6 +99,8 @@ class PickupQueueEntry {
       ),
       isNfcVerified: map['isNfcVerified'] as bool? ?? false,
       exceptionFlag: map['exceptionFlag'] as String?,
+      exceptionCode: map['exceptionCode'] as String?,
+      officeApprovalRequired: map['officeApprovalRequired'] as bool? ?? false,
     );
   }
 
@@ -102,6 +118,8 @@ class PickupQueueEntry {
       'eventType': eventType.name,
       'isNfcVerified': isNfcVerified,
       'exceptionFlag': exceptionFlag,
+      'exceptionCode': exceptionCode,
+      'officeApprovalRequired': officeApprovalRequired,
     };
   }
 }

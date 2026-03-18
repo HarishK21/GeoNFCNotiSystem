@@ -12,6 +12,7 @@ import '../../domain/repositories/guardian_repository.dart';
 import '../../domain/repositories/notice_repository.dart';
 import '../../domain/repositories/pickup_event_repository.dart';
 import '../../domain/repositories/pickup_permission_repository.dart';
+import '../../domain/repositories/push_notification_repository.dart';
 import '../../domain/repositories/queue_repository.dart';
 import '../../domain/repositories/release_event_repository.dart';
 import '../../domain/repositories/school_repository.dart';
@@ -125,3 +126,13 @@ final auditRepositoryProvider = Provider<AuditRepository>((ref) {
   }
   return MockAuditRepository(ref.watch(mockDataStoreProvider));
 });
+
+final pushNotificationRepositoryProvider = Provider<PushNotificationRepository>(
+  (ref) {
+    final environment = ref.watch(appEnvironmentProvider);
+    if (environment.dataSource == AppDataSource.firebase) {
+      return FirestorePushNotificationRepository(FirebaseFirestore.instance);
+    }
+    return MockPushNotificationRepository(ref.watch(mockDataStoreProvider));
+  },
+);

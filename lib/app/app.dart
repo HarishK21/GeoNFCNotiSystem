@@ -11,6 +11,7 @@ class GeoTapGuardianApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(deviceIntegrationBootstrapProvider);
+    ref.watch(workflowHardeningBootstrapProvider);
 
     return MaterialApp.router(
       title: 'GeoTap Guardian',

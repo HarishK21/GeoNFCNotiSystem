@@ -40,6 +40,7 @@ Subcollections:
 - `emergencyNotices`
 - `queue`
 - `auditTrail`
+- `notificationJobs`
 
 ## Core Domain Collections
 
@@ -139,6 +140,8 @@ Fields:
 - `eventType`: `pending`, `approaching`, `verified`, or `released`
 - `isNfcVerified`: bool
 - `exceptionFlag`: string or null
+- `exceptionCode`: string or null
+- `officeApprovalRequired`: bool
 
 ### `schools/{schoolId}/auditTrail/{auditEntryId}`
 
@@ -150,10 +153,35 @@ Fields:
 - `occurredAt`: timestamp
 - `notes`: string
 
+### `schools/{schoolId}/notificationJobs/{jobId}`
+
+Queued push-notification scaffolding for later Cloud Functions or server delivery.
+
+Fields:
+- `schoolId`: string
+- `type`: `guardianApproaching`, `guardianVerified`, `releaseCompleted`, or `emergencyNotice`
+- `audienceTopic`: string
+- `title`: string
+- `body`: string
+- `createdAt`: timestamp
+- `status`: `queued`, `sent`, or `failed`
+- `payload`: map<string, dynamic>
+
 ## Repository Mapping Notes
 
 - Firebase Auth resolves the UID only.
 - `userProfiles/{uid}` resolves the app role, `schoolId`, and optional linked guardian record.
 - Role-specific screens share one router while provider guards enforce role access from the resolved profile.
 - `queue` and `auditTrail` are projection collections so the UI does not need to join multiple collections just to paint the queue or event history.
+- `notificationJobs` is an integration collection for FCM or Cloud Functions fan-out and is safe to keep optional in mock mode.
 - Queue mutations should be written through app logic that preserves the allowed progression: `pending -> approaching -> verified -> released`.
+
+## Security Assumptions
+
+- `userProfiles/{uid}` is expected to use the Firebase Auth UID as its document ID.
+- Parent access is limited to the linked guardian family record in the same school.
+- Staff access is limited to the same school and is expected to be the only path that can complete release and administrative audit actions.
+- Firestore rules should treat queue, pickup events, release events, and audit entries as school-scoped projection data.
+- Temporary pickup permissions should be validated against the linked guardian and their active time window.
+- Release should only be possible when the queue entry is already verified on-site, `isNfcVerified` is true, and no office-approval block is active.
+- Queue reconciliation may repair stale queue projections from newer pickup or release events and should leave an audit entry when it does so.

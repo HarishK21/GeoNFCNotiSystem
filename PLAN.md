@@ -76,20 +76,25 @@ Validation commands:
 - `puro -e geotap flutter test`
 
 ### 5. Release hardening and readiness
-- Add release confirmations, queue reconciliation, and audit filters.
-- Expand tests for role routing, reducers/providers, and release rules.
-- Prepare store-ready app metadata, backend validation, and deployment notes.
+- Enforce release rules around verified state, role, authorization, and office-approval blocks.
+- Add queue reconciliation so stale queue projections recover from newer pickup or release events.
+- Scaffold queued push notifications for approaching, verified, released, and emergency flows.
+- Add Firestore rules, schema checks, and Firebase setup notes for production enablement.
+- Expand tests for release rules, reconciliation, audit consistency, and notification scaffolding.
 
 Acceptance criteria:
-- Staff cannot release an unverified request.
-- Audit trail captures queue, delegation, verification, release, and exception changes.
+- Staff cannot release an unverified or unauthorized request.
+- Queue reconciliation repairs stale queue state and records an audit entry.
+- Push-notification jobs are queued for approaching, verified, release, and emergency events without breaking mock mode.
+- Firestore rules and schema-contract checks exist alongside Firebase setup documentation.
 - Backend and device-hardening tasks are documented for a machine with full Android SDK and Firebase setup.
 
 Validation commands:
+- `puro -e geotap flutter pub get`
+- `puro -e geotap dart format lib test`
 - `puro -e geotap flutter analyze`
 - `puro -e geotap flutter test`
-- `puro -e geotap flutter build apk --debug`
 
 ## Current next milestone
 
-Next up is Milestone 5: harden release rules, backend validation, and production readiness on top of the Android device-event flows.
+Next up is Milestone 6: add backend delivery and approval infrastructure, including Cloud Functions or server workers for notificationJobs, stronger Firestore release enforcement, and office-approval workflows.

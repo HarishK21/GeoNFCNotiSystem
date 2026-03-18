@@ -8,6 +8,7 @@ import '../../domain/models/guardian.dart';
 import '../../domain/models/pickup_event.dart';
 import '../../domain/models/pickup_permission.dart';
 import '../../domain/models/pickup_queue_entry.dart';
+import '../../domain/models/push_notification_job.dart';
 import '../../domain/models/release_event.dart';
 import '../../domain/models/school.dart';
 import '../../domain/models/school_announcement.dart';
@@ -19,6 +20,7 @@ import '../../domain/repositories/guardian_repository.dart';
 import '../../domain/repositories/notice_repository.dart';
 import '../../domain/repositories/pickup_event_repository.dart';
 import '../../domain/repositories/pickup_permission_repository.dart';
+import '../../domain/repositories/push_notification_repository.dart';
 import '../../domain/repositories/queue_repository.dart';
 import '../../domain/repositories/release_event_repository.dart';
 import '../../domain/repositories/school_repository.dart';
@@ -381,5 +383,45 @@ class FirestoreAuditRepository implements AuditRepository {
           ...entry.toMap(),
           'occurredAt': Timestamp.fromDate(entry.occurredAt),
         });
+  }
+}
+
+class FirestorePushNotificationRepository
+    implements PushNotificationRepository {
+  const FirestorePushNotificationRepository(this._firestore);
+
+  final FirebaseFirestore _firestore;
+
+  @override
+  Future<void> enqueueJob(PushNotificationJob job) {
+    return _firestore
+        .collection('schools')
+        .doc(job.schoolId)
+        .collection('notificationJobs')
+        .doc(job.id)
+        .set({...job.toMap(), 'createdAt': Timestamp.fromDate(job.createdAt)});
+  }
+
+  @override
+  Stream<List<PushNotificationJob>> watchJobs(String schoolId) {
+    return _firestore
+        .collection('schools')
+        .doc(schoolId)
+        .collection('notificationJobs')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) {
+                final data = doc.data();
+                return PushNotificationJob.fromMap({
+                  ...data,
+                  'createdAt': readFirestoreDate(
+                    data['createdAt'],
+                  ).toIso8601String(),
+                }, id: doc.id);
+              })
+              .toList(growable: false),
+        );
   }
 }

@@ -7,6 +7,7 @@ import '../../domain/models/guardian.dart';
 import '../../domain/models/pickup_event.dart';
 import '../../domain/models/pickup_permission.dart';
 import '../../domain/models/pickup_queue_entry.dart';
+import '../../domain/models/push_notification_job.dart';
 import '../../domain/models/release_event.dart';
 import '../../domain/models/school.dart';
 import '../../domain/models/school_announcement.dart';
@@ -25,6 +26,7 @@ class MockDataStore {
     _emergencyNotices = _seedEmergencyNotices();
     _queueEntries = _seedQueueEntries();
     _auditTrail = _seedAuditTrail();
+    _notificationJobs = <PushNotificationJob>[];
   }
 
   static const primarySchoolId = 'school_springfield';
@@ -52,6 +54,8 @@ class MockDataStore {
   final _emergencyController =
       StreamController<List<EmergencyNotice>>.broadcast();
   final _auditController = StreamController<List<AuditTrailEntry>>.broadcast();
+  final _notificationJobsController =
+      StreamController<List<PushNotificationJob>>.broadcast();
 
   late final List<UserProfile> _userProfiles;
   late final List<Student> _students;
@@ -63,6 +67,7 @@ class MockDataStore {
   late final List<EmergencyNotice> _emergencyNotices;
   late final List<PickupQueueEntry> _queueEntries;
   late final List<AuditTrailEntry> _auditTrail;
+  late final List<PushNotificationJob> _notificationJobs;
   String? _currentUserId;
 
   List<UserProfile> get userProfiles => List.unmodifiable(_userProfiles);
@@ -78,6 +83,8 @@ class MockDataStore {
       List.unmodifiable(_emergencyNotices);
   List<PickupQueueEntry> get queueEntries => List.unmodifiable(_queueEntries);
   List<AuditTrailEntry> get auditTrail => List.unmodifiable(_auditTrail);
+  List<PushNotificationJob> get notificationJobs =>
+      List.unmodifiable(_notificationJobs);
   String? get currentUserId => _currentUserId;
 
   Stream<String?> watchCurrentUserId() async* {
@@ -138,6 +145,15 @@ class MockDataStore {
     );
   }
 
+  Stream<List<PushNotificationJob>> watchNotificationJobs(
+    String schoolId,
+  ) async* {
+    yield _filterBySchool(_notificationJobs, schoolId, (item) => item.schoolId);
+    yield* _notificationJobsController.stream.map(
+      (items) => _filterBySchool(items, schoolId, (item) => item.schoolId),
+    );
+  }
+
   Future<void> signInAsRole(AppRole role) async {
     _currentUserId = switch (role) {
       AppRole.parent => parentUserId,
@@ -181,6 +197,16 @@ class MockDataStore {
     _auditController.add(List.unmodifiable(_auditTrail));
   }
 
+  Future<void> enqueueNotificationJob(PushNotificationJob job) async {
+    final index = _notificationJobs.indexWhere((item) => item.id == job.id);
+    if (index >= 0) {
+      _notificationJobs[index] = job;
+    } else {
+      _notificationJobs.add(job);
+    }
+    _notificationJobsController.add(List.unmodifiable(_notificationJobs));
+  }
+
   void dispose() {
     _authController.close();
     _queueController.close();
@@ -190,6 +216,7 @@ class MockDataStore {
     _announcementsController.close();
     _emergencyController.close();
     _auditController.close();
+    _notificationJobsController.close();
   }
 
   static List<T> _filterBySchool<T>(

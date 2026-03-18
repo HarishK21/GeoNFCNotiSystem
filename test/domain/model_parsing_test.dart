@@ -6,6 +6,7 @@ import 'package:geo_tap_guardian/domain/models/geofence_trigger_event.dart';
 import 'package:geo_tap_guardian/domain/models/nfc_verification_event.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_queue_entry.dart';
 import 'package:geo_tap_guardian/domain/models/pickup_permission.dart';
+import 'package:geo_tap_guardian/domain/models/push_notification_job.dart';
 import 'package:geo_tap_guardian/domain/models/user_profile.dart';
 
 void main() {
@@ -77,11 +78,15 @@ void main() {
         'eventType': 'released',
         'isNfcVerified': true,
         'exceptionFlag': 'ID check completed',
+        'exceptionCode': 'officeApprovalRequired',
+        'officeApprovalRequired': true,
       });
 
       expect(entry.eventType.name, 'released');
       expect(entry.isReleased, isTrue);
       expect(entry.exceptionFlag, 'ID check completed');
+      expect(entry.exceptionCode, 'officeApprovalRequired');
+      expect(entry.officeApprovalRequired, isTrue);
     },
   );
 
@@ -133,5 +138,23 @@ void main() {
     expect(event.tagId, '04AABB11');
     expect(event.isSimulated, isFalse);
     expect(event.occurredAt.toUtc().minute, 14);
+  });
+
+  test('push notification job parsing resolves type and payload', () {
+    final job = PushNotificationJob.fromMap({
+      'id': 'notification_pickup_1',
+      'schoolId': 'school_1',
+      'type': 'guardianApproaching',
+      'audienceTopic': 'school_school_1_staff',
+      'title': 'Maya Brooks is approaching',
+      'body': 'Andrea Brooks entered the pickup geofence.',
+      'createdAt': '2026-03-17T15:15:00Z',
+      'status': 'queued',
+      'payload': {'studentId': 'student_1', 'guardianId': 'guardian_1'},
+    });
+
+    expect(job.type, PushNotificationType.guardianApproaching);
+    expect(job.status, PushNotificationStatus.queued);
+    expect(job.payload['studentId'], 'student_1');
   });
 }

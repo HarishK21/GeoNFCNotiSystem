@@ -1,0 +1,214 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profilePath(uid) {
+      return /databases/$(database)/documents/userProfiles/$(uid);
+    }
+
+    function hasProfile() {
+      return signedIn() && exists(profilePath(request.auth.uid));
+    }
+
+    function profile() {
+      return get(profilePath(request.auth.uid)).data;
+    }
+
+    function sameSchool(schoolId) {
+      return hasProfile() && profile().schoolId == schoolId;
+    }
+
+    function isParent() {
+      return hasProfile() && profile().role == 'parent';
+    }
+
+    function isStaff() {
+      return hasProfile() && profile().role == 'staff';
+    }
+
+    function linkedGuardianId() {
+      return profile().linkedGuardianId;
+    }
+
+    function guardianPath(schoolId, guardianId) {
+      return /databases/$(database)/documents/schools/$(schoolId)/guardians/$(guardianId);
+    }
+
+    function queuePath(schoolId, queueEntryId) {
+      return /databases/$(database)/documents/schools/$(schoolId)/queue/$(queueEntryId);
+    }
+
+    function guardianData(schoolId, guardianId) {
+      return get(guardianPath(schoolId, guardianId)).data;
+    }
+
+    function isLinkedGuardian(schoolId, guardianId) {
+      return isParent() && sameSchool(schoolId) && linkedGuardianId() == guardianId;
+    }
+
+    function guardianHasStudent(schoolId, guardianId, studentId) {
+      return exists(guardianPath(schoolId, guardianId))
+        && studentId in guardianData(schoolId, guardianId).studentIds;
+    }
+
+    function familyAccess(schoolId, studentId, guardianId) {
+      return isParent()
+        && sameSchool(schoolId)
+        && isLinkedGuardian(schoolId, guardianId)
+        && guardianHasStudent(schoolId, guardianId, studentId);
+    }
+
+    function queueFieldsMatchSchool(schoolId) {
+      return request.resource.data.schoolId == schoolId
+        && request.resource.data.studentId is string
+        && request.resource.data.guardianId is string
+        && request.resource.data.studentName is string
+        && request.resource.data.guardianName is string
+        && request.resource.data.homeroom is string
+        && request.resource.data.pickupZone is string
+        && request.resource.data.etaLabel is string
+        && request.resource.data.eventType in ['pending', 'approaching', 'verified', 'released']
+        && request.resource.data.isNfcVerified is bool
+        && request.resource.data.officeApprovalRequired is bool;
+    }
+
+    function parentCanAdvanceToApproaching(schoolId, queueEntryId) {
+      return familyAccess(schoolId, request.resource.data.studentId, request.resource.data.guardianId)
+        && (
+          !exists(queuePath(schoolId, queueEntryId))
+          || resource.data.eventType == 'pending'
+        )
+        && request.resource.data.eventType == 'approaching'
+        && request.resource.data.isNfcVerified == false
+        && request.resource.data.exceptionFlag == null
+        && request.resource.data.exceptionCode == null
+        && request.resource.data.officeApprovalRequired == false;
+    }
+
+    function staffCanSetQueueState(schoolId, queueEntryId) {
+      return isStaff()
+        && sameSchool(schoolId)
+        && queueFieldsMatchSchool(schoolId)
+        && (
+          (
+            !exists(queuePath(schoolId, queueEntryId))
+            && request.resource.data.eventType == 'pending'
+          )
+          || (
+            exists(queuePath(schoolId, queueEntryId))
+            && resource.data.studentId == request.resource.data.studentId
+            && resource.data.guardianId == request.resource.data.guardianId
+            && (
+              (resource.data.eventType == request.resource.data.eventType)
+              ||
+              (resource.data.eventType == 'pending' && request.resource.data.eventType == 'approaching')
+              || (resource.data.eventType == 'approaching' && request.resource.data.eventType == 'verified' && request.resource.data.isNfcVerified == true)
+              || (
+                resource.data.eventType == 'verified'
+                && request.resource.data.eventType == 'released'
+                && request.resource.data.isNfcVerified == true
+                && request.resource.data.officeApprovalRequired == false
+              )
+            )
+          )
+        );
+    }
+
+    match /userProfiles/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create, update, delete: if false;
+    }
+
+    match /schools/{schoolId} {
+      allow read: if sameSchool(schoolId) || isStaff();
+      allow create, update, delete: if false;
+
+      match /students/{studentId} {
+        allow read: if sameSchool(schoolId) || isStaff();
+        allow create, update, delete: if isStaff() && sameSchool(schoolId);
+      }
+
+      match /guardians/{guardianId} {
+        allow read: if sameSchool(schoolId) || isStaff();
+        allow create, update, delete: if isStaff() && sameSchool(schoolId);
+      }
+
+      match /pickupPermissions/{permissionId} {
+        allow read: if isStaff()
+          || familyAccess(schoolId, resource.data.studentId, resource.data.guardianId);
+        allow create: if (
+            isStaff() && sameSchool(schoolId)
+          ) || (
+            isParent()
+            && sameSchool(schoolId)
+            && request.resource.data.guardianId == linkedGuardianId()
+            && request.resource.data.schoolId == schoolId
+            && request.resource.data.startsAt < request.resource.data.endsAt
+          );
+        allow update, delete: if isStaff() && sameSchool(schoolId);
+      }
+
+      match /pickupEvents/{pickupEventId} {
+        allow read: if isStaff()
+          || familyAccess(schoolId, resource.data.studentId, resource.data.guardianId);
+        allow create: if (
+          familyAccess(schoolId, request.resource.data.studentId, request.resource.data.guardianId)
+          && request.resource.data.type == 'approaching'
+          && request.resource.data.source == 'geofence'
+        ) || (
+          isStaff()
+          && sameSchool(schoolId)
+          && request.resource.data.type in ['verified', 'released']
+        );
+        allow update, delete: if false;
+      }
+
+      match /releaseEvents/{releaseEventId} {
+        allow read: if isStaff()
+          || familyAccess(schoolId, resource.data.studentId, resource.data.guardianId);
+        allow create: if isStaff()
+          && sameSchool(schoolId)
+          && request.resource.data.schoolId == schoolId
+          && request.resource.data.staffId == request.auth.uid
+          && request.resource.data.verificationMethod == 'nfc-verified-release';
+        allow update, delete: if false;
+      }
+
+      match /announcements/{announcementId} {
+        allow read: if sameSchool(schoolId) || isStaff();
+        allow create, update, delete: if isStaff() && sameSchool(schoolId);
+      }
+
+      match /emergencyNotices/{noticeId} {
+        allow read: if sameSchool(schoolId) || isStaff();
+        allow create, update, delete: if isStaff() && sameSchool(schoolId);
+      }
+
+      match /queue/{queueEntryId} {
+        allow read: if isStaff()
+          || familyAccess(schoolId, resource.data.studentId, resource.data.guardianId);
+        allow create: if parentCanAdvanceToApproaching(schoolId, queueEntryId)
+          || staffCanSetQueueState(schoolId, queueEntryId);
+        allow update: if parentCanAdvanceToApproaching(schoolId, queueEntryId)
+          || staffCanSetQueueState(schoolId, queueEntryId);
+        allow delete: if false;
+      }
+
+      match /auditTrail/{auditEntryId} {
+        allow read: if sameSchool(schoolId);
+        allow create: if sameSchool(schoolId) && (isStaff() || isParent());
+        allow update, delete: if false;
+      }
+
+      match /notificationJobs/{jobId} {
+        allow read: if isStaff() && sameSchool(schoolId);
+        allow create: if sameSchool(schoolId) && (isStaff() || isParent());
+        allow update, delete: if false;
+      }
+    }
+  }
+}

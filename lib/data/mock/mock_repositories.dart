@@ -5,6 +5,7 @@ import '../../domain/models/guardian.dart';
 import '../../domain/models/pickup_event.dart';
 import '../../domain/models/pickup_permission.dart';
 import '../../domain/models/pickup_queue_entry.dart';
+import '../../domain/models/push_notification_job.dart';
 import '../../domain/models/release_event.dart';
 import '../../domain/models/school.dart';
 import '../../domain/models/school_announcement.dart';
@@ -16,6 +17,7 @@ import '../../domain/repositories/guardian_repository.dart';
 import '../../domain/repositories/notice_repository.dart';
 import '../../domain/repositories/pickup_event_repository.dart';
 import '../../domain/repositories/pickup_permission_repository.dart';
+import '../../domain/repositories/push_notification_repository.dart';
 import '../../domain/repositories/queue_repository.dart';
 import '../../domain/repositories/release_event_repository.dart';
 import '../../domain/repositories/school_repository.dart';
@@ -196,6 +198,22 @@ class MockAuditRepository implements AuditRepository {
   @override
   Stream<List<AuditTrailEntry>> watchAuditTrail(String schoolId) {
     return _store.watchAuditTrail(schoolId);
+  }
+}
+
+class MockPushNotificationRepository implements PushNotificationRepository {
+  const MockPushNotificationRepository(this._store);
+
+  final MockDataStore _store;
+
+  @override
+  Future<void> enqueueJob(PushNotificationJob job) {
+    return _store.enqueueNotificationJob(job);
+  }
+
+  @override
+  Stream<List<PushNotificationJob>> watchJobs(String schoolId) {
+    return _store.watchNotificationJobs(schoolId);
   }
 }
 
